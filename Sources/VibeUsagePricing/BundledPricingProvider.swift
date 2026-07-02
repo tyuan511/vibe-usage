@@ -13,7 +13,7 @@ public final class BundledPricingProvider: PricingProvider {
     private let rates: [String: ModelPricingRate]
 
     public init() {
-        self.rates = Self.loadRates(from: .module)
+        self.rates = Self.loadRates(from: Self.resourceBundle())
     }
 
     /// Testing/advanced convenience: build a provider from an in-memory rate table.
@@ -47,5 +47,13 @@ public final class BundledPricingProvider: PricingProvider {
                 cacheReadPerMillion: entry.cacheReadPerMillion
             )
         }
+    }
+
+    private static func resourceBundle() -> Bundle {
+        if let resourceURL = Bundle.main.resourceURL?.appendingPathComponent("VibeUsage_VibeUsagePricing.bundle"),
+           let bundle = Bundle(url: resourceURL) {
+            return bundle
+        }
+        return .module
     }
 }

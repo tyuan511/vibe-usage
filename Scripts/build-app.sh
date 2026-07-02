@@ -33,9 +33,8 @@ cp "Scripts/package-Info.plist.template" "${APP_BUNDLE}/Contents/Info.plist"
 printf 'APPL????' > "${APP_BUNDLE}/Contents/PkgInfo"
 
 # Copy every SwiftPM-generated resource bundle (one per target that declares
-# `resources:`, e.g. VibeUsage_VibeUsagePricing.bundle, plus test fixture
-# bundles which are harmless to skip) next to the executable so
-# Bundle.module lookups inside each library resolve correctly at runtime.
+# `resources:`, e.g. VibeUsage_VibeUsagePricing.bundle) into the standard app
+# resources directory.
 shopt -s nullglob
 for bundle in "${BUILD_DIR}"/*.bundle; do
     case "$(basename "$bundle")" in

@@ -589,7 +589,7 @@ private struct VibeUsageLogo: View {
     }
 
     private static var logoImage: NSImage {
-        guard let url = Bundle.module.url(forResource: "logo", withExtension: "png"),
+        guard let url = VibeUsageUIResources.bundle.url(forResource: "logo", withExtension: "png"),
               let image = NSImage(contentsOf: url) else {
             return NSApp.applicationIconImage
         }
@@ -653,7 +653,7 @@ private struct AgentSourceIcon: View {
 private enum AgentIconStore {
     static func image(for sourceID: AgentSourceID, colorScheme: ColorScheme) -> NSImage? {
         let appearance = colorScheme == .dark ? "dark" : "light"
-        guard let url = Bundle.module.url(
+        guard let url = VibeUsageUIResources.bundle.url(
             forResource: sourceID.rawValue,
             withExtension: "png",
             subdirectory: "AgentIcons/\(appearance)"
@@ -661,6 +661,16 @@ private enum AgentIconStore {
             return nil
         }
         return NSImage(contentsOf: url)
+    }
+}
+
+private enum VibeUsageUIResources {
+    static var bundle: Bundle {
+        if let resourceURL = Bundle.main.resourceURL?.appendingPathComponent("VibeUsage_VibeUsageUI.bundle"),
+           let bundle = Bundle(url: resourceURL) {
+            return bundle
+        }
+        return .module
     }
 }
 
