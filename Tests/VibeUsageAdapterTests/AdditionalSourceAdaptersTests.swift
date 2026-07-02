@@ -3,7 +3,7 @@ import GRDB
 import Testing
 import VibeUsageCore
 import VibeUsagePricing
-@testable import VibeUsageAdapterAdditional
+@testable import VibeUsageAdapter
 
 @Test func additionalAdaptersExposeCcusageProviders() {
     let ids = AdditionalSourceAdapters.all.map { $0.descriptor.id.rawValue }

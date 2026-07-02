@@ -2,7 +2,7 @@ import Foundation
 import Testing
 import VibeUsageCore
 import VibeUsagePricing
-@testable import VibeUsageAdapterClaude
+@testable import VibeUsageAdapter
 
 @Test func claudeAdapterParsesUsageJSONLAndUsesReportedCost() throws {
     let file = try TemporaryUsageFile(contents: """

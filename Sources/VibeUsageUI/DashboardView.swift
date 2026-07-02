@@ -248,19 +248,25 @@ public struct MenuBarUsageView: View {
 
                     Button(action: onRefresh) {
                         Image(systemName: isRefreshing ? "hourglass" : "arrow.clockwise")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(Color(nsColor: .secondaryLabelColor))
                             .frame(width: 18, height: 18)
                     }
-                    .buttonStyle(.glass)
+                    .buttonStyle(.plain)
                     .controlSize(.small)
+                    .frame(width: 28, height: 28)
                     .disabled(isRefreshing)
                     .help(L.refresh)
 
                     Button(action: onQuit) {
                         Image(systemName: "power")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(Color(nsColor: .secondaryLabelColor))
                             .frame(width: 18, height: 18)
                     }
-                    .buttonStyle(.glass)
+                    .buttonStyle(.plain)
                     .controlSize(.small)
+                    .frame(width: 28, height: 28)
                     .help(L.text(zh: "退出 VibeUsage", en: "Quit VibeUsage"))
                 }
             }

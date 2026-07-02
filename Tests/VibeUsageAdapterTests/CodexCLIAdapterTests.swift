@@ -2,7 +2,7 @@ import Foundation
 import Testing
 import VibeUsageCore
 import VibeUsagePricing
-@testable import VibeUsageAdapterCodex
+@testable import VibeUsageAdapter
 
 @Test func codexAdapterParsesLastTokenUsage() throws {
     let file = try TemporaryCodexUsageFile(contents: """

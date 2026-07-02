@@ -7,7 +7,8 @@ let package = Package(
         .macOS(.v26)
     ],
     products: [
-        .executable(name: "VibeUsageApp", targets: ["VibeUsageApp"])
+        .executable(name: "VibeUsageApp", targets: ["VibeUsageApp"]),
+        .executable(name: "VibeUsagePreviewRenderer", targets: ["VibeUsagePreviewRenderer"])
     ],
     dependencies: [
         .package(url: "https://github.com/groue/GRDB.swift.git", from: "6.29.0")
@@ -69,29 +70,9 @@ let package = Package(
             dependencies: ["VibeUsageAggregation", "VibeUsageStorage"]
         ),
 
-        // MARK: - Adapters (each self-contained; only depends on Core + Pricing)
+        // MARK: - Adapters
         .target(
-            name: "VibeUsageAdapterClaude",
-            dependencies: ["VibeUsageCore", "VibeUsagePricing"]
-        ),
-        .testTarget(
-            name: "VibeUsageAdapterClaudeTests",
-            dependencies: ["VibeUsageAdapterClaude"],
-            resources: [.copy("Fixtures")]
-        ),
-
-        .target(
-            name: "VibeUsageAdapterCodex",
-            dependencies: ["VibeUsageCore", "VibeUsagePricing"]
-        ),
-        .testTarget(
-            name: "VibeUsageAdapterCodexTests",
-            dependencies: ["VibeUsageAdapterCodex"],
-            resources: [.copy("Fixtures")]
-        ),
-
-        .target(
-            name: "VibeUsageAdapterAdditional",
+            name: "VibeUsageAdapter",
             dependencies: [
                 "VibeUsageCore",
                 "VibeUsagePricing",
@@ -99,9 +80,9 @@ let package = Package(
             ]
         ),
         .testTarget(
-            name: "VibeUsageAdapterAdditionalTests",
+            name: "VibeUsageAdapterTests",
             dependencies: [
-                "VibeUsageAdapterAdditional",
+                "VibeUsageAdapter",
                 "VibeUsagePricing",
                 .product(name: "GRDB", package: "GRDB.swift")
             ]
@@ -126,9 +107,17 @@ let package = Package(
                 "VibeUsageStorage",
                 "VibeUsageWatching",
                 "VibeUsageAggregation",
-                "VibeUsageAdapterClaude",
-                "VibeUsageAdapterCodex",
-                "VibeUsageAdapterAdditional",
+                "VibeUsageAdapter",
+                "VibeUsageUI"
+            ]
+        ),
+
+        .executableTarget(
+            name: "VibeUsagePreviewRenderer",
+            dependencies: [
+                "VibeUsageCore",
+                "VibeUsageAggregation",
+                "VibeUsageAdapter",
                 "VibeUsageUI"
             ]
         )

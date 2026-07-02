@@ -131,14 +131,14 @@ public struct CodexCLIAdapter: UsageSourceAdapter {
     }
 
     private static func turnContextModel(from object: [String: Any]) -> String? {
-        guard string(object["type"]) == "turn_context", let payload = object["payload"] as? [String: Any] else { return nil }
+        guard codexString(object["type"]) == "turn_context", let payload = object["payload"] as? [String: Any] else { return nil }
         return model(from: payload)
     }
 
     private static func tokenUsageEvent(from object: [String: Any], state: inout CodexParseState) -> ParsedCodexEvent? {
-        if string(object["type"]) == "event_msg",
+        if codexString(object["type"]) == "event_msg",
            let payload = object["payload"] as? [String: Any],
-           string(payload["type"]) == "token_count" {
+           codexString(payload["type"]) == "token_count" {
             return sessionTokenUsageEvent(from: object, payload: payload, state: &state)
         }
         return headlessTokenUsageEvent(from: object, state: &state)
@@ -149,7 +149,7 @@ public struct CodexCLIAdapter: UsageSourceAdapter {
         payload: [String: Any],
         state: inout CodexParseState
     ) -> ParsedCodexEvent? {
-        guard let timestamp = string(object["timestamp"]) else { return nil }
+        guard let timestamp = codexString(object["timestamp"]) else { return nil }
         let info = payload["info"] as? [String: Any] ?? [:]
         let total = parseUsage(from: info["total_token_usage"])
         let rawUsage = parseUsage(from: info["last_token_usage"]) ?? total.map { totalUsage in
@@ -172,9 +172,9 @@ public struct CodexCLIAdapter: UsageSourceAdapter {
             ?? dictionary(object["response"]).flatMap { parseUsage(from: $0["usage"]) }
         guard let rawUsage else { return nil }
 
-        let timestamp = string(object["timestamp"])
-            ?? string(object["created_at"])
-            ?? string(object["createdAt"])
+        let timestamp = codexString(object["timestamp"])
+            ?? codexString(object["created_at"])
+            ?? codexString(object["createdAt"])
             ?? dictionary(object["data"]).flatMap(timestampString)
             ?? dictionary(object["result"]).flatMap(timestampString)
             ?? dictionary(object["response"]).flatMap(timestampString)
@@ -305,11 +305,11 @@ private func collectJSONLFiles(under directory: URL) -> [URL] {
 
 private func parseUsage(from value: Any?) -> CodexRawUsage? {
     guard let dictionary = value as? [String: Any] else { return nil }
-    let input = int(dictionary["input_tokens"]) ?? int(dictionary["prompt_tokens"]) ?? int(dictionary["input"]) ?? 0
-    let output = int(dictionary["output_tokens"]) ?? int(dictionary["completion_tokens"]) ?? int(dictionary["output"]) ?? 0
-    let reasoning = int(dictionary["reasoning_output_tokens"]) ?? int(dictionary["reasoning_tokens"]) ?? 0
-    let cached = int(dictionary["cached_input_tokens"]) ?? int(dictionary["cache_read_input_tokens"]) ?? int(dictionary["cached_tokens"]) ?? 0
-    let total = int(dictionary["total_tokens"]).flatMap { $0 > 0 || input + output + reasoning == 0 ? $0 : nil } ?? (input + output + reasoning)
+    let input = codexInt(dictionary["input_tokens"]) ?? codexInt(dictionary["prompt_tokens"]) ?? codexInt(dictionary["input"]) ?? 0
+    let output = codexInt(dictionary["output_tokens"]) ?? codexInt(dictionary["completion_tokens"]) ?? codexInt(dictionary["output"]) ?? 0
+    let reasoning = codexInt(dictionary["reasoning_output_tokens"]) ?? codexInt(dictionary["reasoning_tokens"]) ?? 0
+    let cached = codexInt(dictionary["cached_input_tokens"]) ?? codexInt(dictionary["cache_read_input_tokens"]) ?? codexInt(dictionary["cached_tokens"]) ?? 0
+    let total = codexInt(dictionary["total_tokens"]).flatMap { $0 > 0 || input + output + reasoning == 0 ? $0 : nil } ?? (input + output + reasoning)
     return CodexRawUsage(
         inputTokens: input,
         cachedInputTokens: cached,
@@ -320,20 +320,20 @@ private func parseUsage(from value: Any?) -> CodexRawUsage? {
 }
 
 private func model(from dictionary: [String: Any]) -> String? {
-    string(dictionary["model"])?.nonEmpty
-        ?? string(dictionary["model_name"])?.nonEmpty
-        ?? (dictionary["metadata"] as? [String: Any]).flatMap { string($0["model"])?.nonEmpty }
+    codexString(dictionary["model"])?.nonEmpty
+        ?? codexString(dictionary["model_name"])?.nonEmpty
+        ?? (dictionary["metadata"] as? [String: Any]).flatMap { codexString($0["model"])?.nonEmpty }
 }
 
 private func timestampString(from dictionary: [String: Any]) -> String? {
-    string(dictionary["timestamp"]) ?? string(dictionary["created_at"]) ?? string(dictionary["createdAt"])
+    codexString(dictionary["timestamp"]) ?? codexString(dictionary["created_at"]) ?? codexString(dictionary["createdAt"])
 }
 
 private func dictionary(_ value: Any?) -> [String: Any]? {
     value as? [String: Any]
 }
 
-private func string(_ value: Any?) -> String? {
+private func codexString(_ value: Any?) -> String? {
     switch value {
     case let value as String:
         return value.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -344,7 +344,7 @@ private func string(_ value: Any?) -> String? {
     }
 }
 
-private func int(_ value: Any?) -> Int? {
+private func codexInt(_ value: Any?) -> Int? {
     switch value {
     case let value as Int:
         return value
@@ -357,25 +357,6 @@ private func int(_ value: Any?) -> Int? {
     }
 }
 
-private extension URL {
-    var isDirectory: Bool {
-        (try? resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true
-    }
-}
-
-private extension String {
-    var nonEmpty: String? {
-        isEmpty ? nil : self
-    }
-
-    var expandingTildeInPath: String {
-        guard self == "~" || hasPrefix("~/") else { return self }
-        let home = FileManager.default.homeDirectoryForCurrentUser.path
-        if self == "~" { return home }
-        return home + String(dropFirst())
-    }
-}
-
 private extension Substring {
     var nonEmpty: String? {
         isEmpty ? nil : String(self)
@@ -383,26 +364,7 @@ private extension Substring {
 }
 
 private extension Date {
-    static func vibeUsageParse(_ value: String) -> Date? {
-        ISO8601DateFormatter.vibeUsageFractional.date(from: value)
-            ?? ISO8601DateFormatter.vibeUsagePlain.date(from: value)
-    }
-
     var vibeUsageISOString: String {
         ISO8601DateFormatter.vibeUsageFractional.string(from: self)
     }
-}
-
-private extension ISO8601DateFormatter {
-    static let vibeUsageFractional: ISO8601DateFormatter = {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return formatter
-    }()
-
-    static let vibeUsagePlain: ISO8601DateFormatter = {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime]
-        return formatter
-    }()
 }

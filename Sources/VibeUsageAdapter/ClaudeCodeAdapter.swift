@@ -278,24 +278,7 @@ private func collectJSONLFiles(under directory: URL) -> [URL] {
     }
 }
 
-private extension URL {
-    var isDirectory: Bool {
-        (try? resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true
-    }
-}
-
 private extension String {
-    var nonEmpty: String? {
-        isEmpty ? nil : self
-    }
-
-    var expandingTildeInPath: String {
-        guard self == "~" || hasPrefix("~/") else { return self }
-        let home = FileManager.default.homeDirectoryForCurrentUser.path
-        if self == "~" { return home }
-        return home + String(dropFirst())
-    }
-
     var isSemverLike: Bool {
         range(of: #"^\d+\.\d+\.\d+"#, options: .regularExpression) != nil
     }
@@ -311,25 +294,4 @@ private extension JSONDecoder {
     static var vibeUsage: JSONDecoder {
         JSONDecoder()
     }
-}
-
-private extension Date {
-    static func vibeUsageParse(_ value: String) -> Date? {
-        ISO8601DateFormatter.vibeUsageFractional.date(from: value)
-            ?? ISO8601DateFormatter.vibeUsagePlain.date(from: value)
-    }
-}
-
-private extension ISO8601DateFormatter {
-    static let vibeUsageFractional: ISO8601DateFormatter = {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return formatter
-    }()
-
-    static let vibeUsagePlain: ISO8601DateFormatter = {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime]
-        return formatter
-    }()
 }

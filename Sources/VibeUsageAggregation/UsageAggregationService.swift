@@ -18,6 +18,11 @@ public struct SourceUsageSummary: Identifiable, Sendable, Equatable {
     public var id: AgentSourceID { descriptor.id }
     public let descriptor: AgentSourceDescriptor
     public let totals: UsageTotals
+
+    public init(descriptor: AgentSourceDescriptor, totals: UsageTotals) {
+        self.descriptor = descriptor
+        self.totals = totals
+    }
 }
 
 public struct DailyUsageSummary: Identifiable, Sendable, Equatable {
@@ -26,6 +31,13 @@ public struct DailyUsageSummary: Identifiable, Sendable, Equatable {
     public let sourceID: AgentSourceID
     public let tokens: TokenCounts
     public let costUSD: Decimal
+
+    public init(day: String, sourceID: AgentSourceID, tokens: TokenCounts, costUSD: Decimal) {
+        self.day = day
+        self.sourceID = sourceID
+        self.tokens = tokens
+        self.costUSD = costUSD
+    }
 }
 
 public struct ModelUsageSummary: Identifiable, Sendable, Equatable {
@@ -35,6 +47,20 @@ public struct ModelUsageSummary: Identifiable, Sendable, Equatable {
     public let tokens: TokenCounts
     public let costUSD: Decimal
     public let eventCount: Int
+
+    public init(
+        modelFamily: String,
+        sourceID: AgentSourceID,
+        tokens: TokenCounts,
+        costUSD: Decimal,
+        eventCount: Int
+    ) {
+        self.modelFamily = modelFamily
+        self.sourceID = sourceID
+        self.tokens = tokens
+        self.costUSD = costUSD
+        self.eventCount = eventCount
+    }
 }
 
 public enum UsageDateRangePreset: String, CaseIterable, Identifiable, Sendable {
@@ -66,6 +92,30 @@ public struct UsageDashboardSnapshot: Sendable, Equatable {
     public let models: [ModelUsageSummary]
     public let availableModels: [ModelUsageSummary]
     public let discoveredSources: [AgentSourceDescriptor]
+
+    public init(
+        generatedAt: Date,
+        rangeStartDay: String,
+        rangeEndDay: String,
+        totals: UsageTotals,
+        sources: [SourceUsageSummary],
+        daily: [DailyUsageSummary],
+        activity: [DailyUsageSummary],
+        models: [ModelUsageSummary],
+        availableModels: [ModelUsageSummary],
+        discoveredSources: [AgentSourceDescriptor]
+    ) {
+        self.generatedAt = generatedAt
+        self.rangeStartDay = rangeStartDay
+        self.rangeEndDay = rangeEndDay
+        self.totals = totals
+        self.sources = sources
+        self.daily = daily
+        self.activity = activity
+        self.models = models
+        self.availableModels = availableModels
+        self.discoveredSources = discoveredSources
+    }
 
     public static func empty(descriptors: [AgentSourceDescriptor] = []) -> UsageDashboardSnapshot {
         let today = Date.vibeUsageDayString(Date())

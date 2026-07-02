@@ -1,8 +1,6 @@
 import AppKit
 import SwiftUI
-import VibeUsageAdapterAdditional
-import VibeUsageAdapterClaude
-import VibeUsageAdapterCodex
+import VibeUsageAdapter
 import VibeUsageAggregation
 import VibeUsageCore
 import VibeUsagePricing
