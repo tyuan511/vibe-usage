@@ -91,6 +91,18 @@ VibeUsage 默认会把本地缓存写到：
 
 各 agent 的源日志仍保留在它们自己的默认目录中。部分适配器支持环境变量覆盖，例如 `CLAUDE_CONFIG_DIR`、`CODEX_HOME`、`OPENCODE_DATA_DIR`、`AMP_DATA_DIR`、`GEMINI_DATA_DIR` 等。
 
+## macOS 提示应用已损坏
+
+如果从 GitHub Release 下载 DMG 后，macOS 提示“VibeUsage 已损坏，无法打开”或要求移到废纸篓，通常是因为当前 release 使用 ad-hoc 签名，没有经过 Apple notarization，系统给下载的 `.app` 加上了 quarantine 标记。
+
+把应用拖到“应用程序”目录后，可以在终端执行：
+
+```bash
+sudo xattr -dr com.apple.quarantine /Applications/VibeUsage.app
+```
+
+然后重新打开 VibeUsage。如果你放在其他目录，把命令中的 `/Applications/VibeUsage.app` 替换为实际路径即可。
+
 ## 开发
 
 要求：
