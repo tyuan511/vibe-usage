@@ -1,10 +1,10 @@
-// swift-tools-version: 5.10
+// swift-tools-version: 6.2
 import PackageDescription
 
 let package = Package(
     name: "VibeUsage",
     platforms: [
-        .macOS(.v14)
+        .macOS(.v26)
     ],
     products: [
         .executable(name: "VibeUsageApp", targets: ["VibeUsageApp"])
@@ -90,10 +90,31 @@ let package = Package(
             resources: [.copy("Fixtures")]
         ),
 
+        .target(
+            name: "VibeUsageAdapterAdditional",
+            dependencies: [
+                "VibeUsageCore",
+                "VibeUsagePricing",
+                .product(name: "GRDB", package: "GRDB.swift")
+            ]
+        ),
+        .testTarget(
+            name: "VibeUsageAdapterAdditionalTests",
+            dependencies: [
+                "VibeUsageAdapterAdditional",
+                "VibeUsagePricing",
+                .product(name: "GRDB", package: "GRDB.swift")
+            ]
+        ),
+
         // MARK: - UI (SwiftUI views; only knows adapters through AdapterRegistry)
         .target(
             name: "VibeUsageUI",
-            dependencies: ["VibeUsageCore", "VibeUsageAggregation"]
+            dependencies: ["VibeUsageCore", "VibeUsageAggregation"],
+            resources: [
+                .copy("Resources/logo.png"),
+                .copy("Resources/AgentIcons")
+            ]
         ),
 
         // MARK: - App (composition root: only place that imports concrete adapters)
@@ -107,8 +128,10 @@ let package = Package(
                 "VibeUsageAggregation",
                 "VibeUsageAdapterClaude",
                 "VibeUsageAdapterCodex",
+                "VibeUsageAdapterAdditional",
                 "VibeUsageUI"
             ]
         )
-    ]
+    ],
+    swiftLanguageModes: [.v5]
 )

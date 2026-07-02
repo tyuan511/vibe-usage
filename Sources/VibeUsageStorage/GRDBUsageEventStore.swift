@@ -109,11 +109,17 @@ public final class GRDBUsageEventStore: UsageEventStore, Sendable {
     public func dailySummaries(
         sourceFilter: Set<AgentSourceID>,
         startDay: String,
-        endDay: String
+        endDay: String,
+        modelFamilyFilter: Set<String> = []
     ) throws -> [DailySourceUsage] {
         try dbQueue.read { db in
-            let sql = Self.dailySummarySQL(sourceFilter: sourceFilter)
-            let arguments = Self.rangeArguments(startDay: startDay, endDay: endDay, sourceFilter: sourceFilter)
+            let sql = Self.dailySummarySQL(sourceFilter: sourceFilter, modelFamilyFilter: modelFamilyFilter)
+            let arguments = Self.rangeArguments(
+                startDay: startDay,
+                endDay: endDay,
+                sourceFilter: sourceFilter,
+                modelFamilyFilter: modelFamilyFilter
+            )
             let rows = try Row.fetchAll(db, sql: sql, arguments: arguments)
             return rows.map { row in
                 DailySourceUsage(
@@ -138,11 +144,17 @@ public final class GRDBUsageEventStore: UsageEventStore, Sendable {
     public func modelBreakdown(
         sourceFilter: Set<AgentSourceID>,
         startDay: String,
-        endDay: String
+        endDay: String,
+        modelFamilyFilter: Set<String> = []
     ) throws -> [ModelBreakdownRow] {
         try dbQueue.read { db in
-            let sql = Self.modelBreakdownSQL(sourceFilter: sourceFilter)
-            let arguments = Self.rangeArguments(startDay: startDay, endDay: endDay, sourceFilter: sourceFilter)
+            let sql = Self.modelBreakdownSQL(sourceFilter: sourceFilter, modelFamilyFilter: modelFamilyFilter)
+            let arguments = Self.rangeArguments(
+                startDay: startDay,
+                endDay: endDay,
+                sourceFilter: sourceFilter,
+                modelFamilyFilter: modelFamilyFilter
+            )
             let rows = try Row.fetchAll(db, sql: sql, arguments: arguments)
             return rows.map { row in
                 ModelBreakdownRow(
@@ -168,17 +180,25 @@ public final class GRDBUsageEventStore: UsageEventStore, Sendable {
         return "AND source_id IN (\(placeholders))"
     }
 
+    private static func modelFilterClause(_ modelFamilyFilter: Set<String>) -> String {
+        guard !modelFamilyFilter.isEmpty else { return "" }
+        let placeholders = modelFamilyFilter.map { _ in "?" }.joined(separator: ", ")
+        return "AND model_family IN (\(placeholders))"
+    }
+
     private static func rangeArguments(
         startDay: String,
         endDay: String,
-        sourceFilter: Set<AgentSourceID>
+        sourceFilter: Set<AgentSourceID>,
+        modelFamilyFilter: Set<String>
     ) -> StatementArguments {
         var values: [DatabaseValueConvertible] = [startDay, endDay]
-        values.append(contentsOf: sourceFilter.map(\.rawValue))
+        values.append(contentsOf: sourceFilter.map(\.rawValue).sorted())
+        values.append(contentsOf: modelFamilyFilter.sorted())
         return StatementArguments(values)
     }
 
-    private static func dailySummarySQL(sourceFilter: Set<AgentSourceID>) -> String {
+    private static func dailySummarySQL(sourceFilter: Set<AgentSourceID>, modelFamilyFilter: Set<String>) -> String {
         """
         SELECT substr(timestamp_utc, 1, 10) AS day,
                source_id,
@@ -191,12 +211,13 @@ public final class GRDBUsageEventStore: UsageEventStore, Sendable {
         FROM usage_event
         WHERE substr(timestamp_utc, 1, 10) BETWEEN ? AND ?
         \(sourceFilterClause(sourceFilter))
+        \(modelFilterClause(modelFamilyFilter))
         GROUP BY day, source_id
         ORDER BY day
         """
     }
 
-    private static func modelBreakdownSQL(sourceFilter: Set<AgentSourceID>) -> String {
+    private static func modelBreakdownSQL(sourceFilter: Set<AgentSourceID>, modelFamilyFilter: Set<String>) -> String {
         """
         SELECT model_family,
                source_id,
@@ -210,6 +231,7 @@ public final class GRDBUsageEventStore: UsageEventStore, Sendable {
         FROM usage_event
         WHERE substr(timestamp_utc, 1, 10) BETWEEN ? AND ?
         \(sourceFilterClause(sourceFilter))
+        \(modelFilterClause(modelFamilyFilter))
         GROUP BY model_family, source_id
         ORDER BY cost DESC
         """

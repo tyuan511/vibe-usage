@@ -5,9 +5,10 @@ import Foundation
 /// Field meaning per source:
 /// - Claude Code: `cacheCreate` = `cache_creation_input_tokens`,
 ///   `cacheRead` = `cache_read_input_tokens`, `reasoning` always 0.
-/// - Codex CLI: `cacheCreate` always 0 (Codex has no cache-write concept),
-///   `cacheRead` = cached input tokens, `reasoning` = reasoning output tokens
-///   (already included in `output`, tracked separately for display only).
+/// - Codex CLI: `input` = non-cached input tokens, `cacheCreate` always 0
+///   (Codex has no cache-write concept), `cacheRead` = cached input tokens,
+///   `reasoning` = reasoning output tokens (already included in `output`,
+///   tracked separately for display only).
 public struct TokenCounts: Sendable, Codable, Equatable {
     public var input: Int
     public var output: Int

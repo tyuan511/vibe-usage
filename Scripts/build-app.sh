@@ -13,6 +13,9 @@ APP_NAME="VibeUsage"
 EXECUTABLE_NAME="VibeUsageApp"
 BUILD_DIR=".build/${CONFIG}"
 APP_BUNDLE=".build/${APP_NAME}.app"
+VERSION="${VERSION:-0.1.0}"
+BUILD_NUMBER="${BUILD_NUMBER:-1}"
+SIGN_IDENTITY="${SIGN_IDENTITY:--}"
 
 echo "==> swift build -c ${CONFIG}"
 swift build -c "${CONFIG}"
@@ -25,6 +28,8 @@ mkdir -p "${APP_BUNDLE}/Contents/Resources"
 cp "${BUILD_DIR}/${EXECUTABLE_NAME}" "${APP_BUNDLE}/Contents/MacOS/${EXECUTABLE_NAME}"
 
 cp "Scripts/package-Info.plist.template" "${APP_BUNDLE}/Contents/Info.plist"
+/usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString ${VERSION}" "${APP_BUNDLE}/Contents/Info.plist"
+/usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${BUILD_NUMBER}" "${APP_BUNDLE}/Contents/Info.plist"
 printf 'APPL????' > "${APP_BUNDLE}/Contents/PkgInfo"
 
 # Copy every SwiftPM-generated resource bundle (one per target that declares
@@ -33,6 +38,9 @@ printf 'APPL????' > "${APP_BUNDLE}/Contents/PkgInfo"
 # Bundle.module lookups inside each library resolve correctly at runtime.
 shopt -s nullglob
 for bundle in "${BUILD_DIR}"/*.bundle; do
+    case "$(basename "$bundle")" in
+        *Tests.bundle) continue ;;
+    esac
     echo "    + $(basename "$bundle")"
     cp -R "$bundle" "${APP_BUNDLE}/Contents/Resources/"
 done
@@ -47,14 +55,18 @@ if [ -f "Resources/AppIcon.appiconset/Contents.json" ] && command -v actool >/de
     actool "$ASSET_CATALOG_DIR" \
         --compile "${APP_BUNDLE}/Contents/Resources" \
         --platform macosx \
-        --minimum-deployment-target 14.0 \
+        --minimum-deployment-target 26.0 \
         --app-icon AppIcon \
         --output-partial-info-plist /dev/null \
         >/dev/null
 fi
 
-echo "==> codesign (ad-hoc)"
-codesign --force --deep --sign - "${APP_BUNDLE}"
+if [ "${SIGN_IDENTITY}" = "-" ]; then
+    echo "==> codesign (ad-hoc)"
+else
+    echo "==> codesign (${SIGN_IDENTITY})"
+fi
+codesign --force --deep --sign "${SIGN_IDENTITY}" "${APP_BUNDLE}"
 
 echo "==> Built ${APP_BUNDLE}"
 echo "    Run with: open ${APP_BUNDLE}"
