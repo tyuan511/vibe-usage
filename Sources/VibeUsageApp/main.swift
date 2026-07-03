@@ -22,8 +22,8 @@ struct VibeUsageApp: App {
                 selectedDateRange: $viewModel.selectedDateRange,
                 onRefresh: { viewModel.refresh() },
                 onFilterChange: { viewModel.applyFilters() },
-                onAgentVisibilityCommit: { hiddenSourceIDs in
-                    viewModel.setHiddenAgentSourceIDs(hiddenSourceIDs)
+                onAgentDisplayCommit: { hidden in
+                    viewModel.setHiddenAgentSourceIDs(hidden)
                 },
                 onQuit: { NSApp.terminate(nil) }
             )
@@ -31,7 +31,7 @@ struct VibeUsageApp: App {
                 viewModel.refresh()
             }
         } label: {
-            Label(viewModel.menuTitle, systemImage: "chart.bar.xaxis")
+            Image(systemName: "chart.bar.xaxis")
         }
         .menuBarExtraStyle(.window)
     }
@@ -50,6 +50,8 @@ final class AppViewModel: ObservableObject {
     private let aggregation: UsageAggregationService
     private let allSourceDescriptors: [AgentSourceDescriptor]
     private var locallyDiscoveredSourceIDs = Set<AgentSourceID>()
+    private var autoRefreshCoordinator: UsageAutoRefreshCoordinator?
+    private var pendingRefresh = false
 
     init() {
         let registry = AdapterRegistry()
@@ -75,20 +77,35 @@ final class AppViewModel: ObservableObject {
         self.hiddenAgentSourceIDs = Self.loadHiddenAgentSourceIDs()
         self.snapshot = .empty()
 
-        Task { @MainActor in
-            refresh()
+        autoRefreshCoordinator = UsageAutoRefreshCoordinator(registry: registry) { [weak self] in
+            await self?.performRefresh()
         }
+        autoRefreshCoordinator?.start()
+
         Task {
             await GitHubReleaseUpdater.checkForUpdates()
         }
     }
 
-    var menuTitle: String {
-        isRefreshing ? VibeUsageStrings.text(zh: "扫描中", en: "Scanning") : snapshot.totals.costUSD.usdString
+    deinit {
+        autoRefreshCoordinator?.stop()
+    }
+
+    func setHiddenAgentSourceIDs(_ hiddenSourceIDs: Set<AgentSourceID>) {
+        hiddenAgentSourceIDs = hiddenSourceIDs
+        Self.saveHiddenAgentSourceIDs(hiddenAgentSourceIDs)
+        applyFilters()
     }
 
     func refresh() {
-        guard !isRefreshing else { return }
+        guard !isRefreshing else {
+            pendingRefresh = true
+            return
+        }
+        performRefresh()
+    }
+
+    private func performRefresh() {
         isRefreshing = true
         lastError = nil
 
@@ -111,14 +128,22 @@ final class AppViewModel: ObservableObject {
                     locallyDiscoveredSourceIDs = summary.discoveredSourceIDs
                     configurableAgentSources = configurableSources
                     snapshot = next
-                    isRefreshing = false
+                    finishRefreshCycle()
                 }
             } catch {
                 await MainActor.run {
                     lastError = error.localizedDescription
-                    isRefreshing = false
+                    finishRefreshCycle()
                 }
             }
+        }
+    }
+
+    private func finishRefreshCycle() {
+        isRefreshing = false
+        if pendingRefresh {
+            pendingRefresh = false
+            performRefresh()
         }
     }
 
@@ -135,12 +160,6 @@ final class AppViewModel: ObservableObject {
         } catch {
             lastError = error.localizedDescription
         }
-    }
-
-    func setHiddenAgentSourceIDs(_ ids: Set<AgentSourceID>) {
-        hiddenAgentSourceIDs = ids
-        Self.saveHiddenAgentSourceIDs(hiddenAgentSourceIDs)
-        applyFilters()
     }
 
     private static func visibleSourceIDs(
@@ -168,17 +187,6 @@ final class AppViewModel: ObservableObject {
         UserDefaults.standard.set(ids.map(\.rawValue).sorted(), forKey: hiddenAgentSourceIDsKey)
     }
 
-}
-
-private extension Decimal {
-    var usdString: String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .currency
-        formatter.currencyCode = "USD"
-        formatter.currencySymbol = "$"
-        formatter.maximumFractionDigits = self < 1 ? 4 : 2
-        return formatter.string(from: self as NSDecimalNumber) ?? "$0.00"
-    }
 }
 
 VibeUsageApp.main()

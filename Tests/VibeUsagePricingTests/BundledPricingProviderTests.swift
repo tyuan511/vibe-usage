@@ -10,6 +10,13 @@ import VibeUsageCore
     #expect((rate?.outputPerMillion ?? 0) > 0)
 }
 
+@Test func loadsGeminiQwenAndKimiFamiliesFromBundledSnapshot() {
+    let provider = BundledPricingProvider()
+    #expect(provider.rate(forModelFamily: "gemini-3-flash-preview") != nil)
+    #expect(provider.rate(forModelFamily: "qwen3-coder-plus") != nil)
+    #expect(provider.rate(forModelFamily: "kimi-k2") != nil)
+}
+
 @Test func missingFamilyReturnsNilRatherThanGuessing() {
     let provider = BundledPricingProvider()
     #expect(provider.rate(forModelFamily: "definitely-not-a-real-model-family") == nil)

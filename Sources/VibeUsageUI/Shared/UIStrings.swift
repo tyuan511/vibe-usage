@@ -1,0 +1,36 @@
+import Foundation
+import VibeUsageCore
+
+enum UIStrings {
+    static func text(zh: String, en: String) -> String {
+        VibeUsageStrings.text(zh: zh, en: en)
+    }
+
+    static let scanning = text(zh: "扫描中", en: "Scanning")
+    static let refresh = text(zh: "刷新", en: "Refresh")
+    static let spend = text(zh: "花费", en: "Spend")
+    static let cost = text(zh: "费用", en: "Cost")
+    static let tokens = text(zh: "Tokens", en: "Tokens")
+    static let events = text(zh: "事件", en: "Events")
+    static let input = text(zh: "输入", en: "Input")
+    static let output = text(zh: "输出", en: "Output")
+    static let cacheRead = text(zh: "缓存读取", en: "Cache Read")
+    static let agents = text(zh: "Agents", en: "Agents")
+    static let models = text(zh: "模型", en: "Models")
+    static let done = text(zh: "完成", en: "Done")
+
+    static func updated(_ date: Date) -> String {
+        text(
+            zh: "更新于 \(date.formatted(date: .omitted, time: .shortened))",
+            en: "Updated \(date.formatted(date: .omitted, time: .shortened))"
+        )
+    }
+
+    static func activityDetail(day: String, tokens: String, cost: String) -> String {
+        text(zh: "\(day): \(tokens) tokens, \(cost)", en: "\(day): \(tokens) tokens, \(cost)")
+    }
+
+    static func modelTokenLine(sourceID: String, tokens: String) -> String {
+        text(zh: "\(sourceID) · \(tokens) tokens", en: "\(sourceID) · \(tokens) tokens")
+    }
+}

@@ -106,6 +106,427 @@
     "inputPerMillion": 1.5,
     "outputPerMillion": 6.0
   },
+  "deepseek-chat": {
+    "cacheReadPerMillion": 0.028,
+    "inputPerMillion": 0.28,
+    "outputPerMillion": 0.42
+  },
+  "deepseek-coder": {
+    "inputPerMillion": 0.14,
+    "outputPerMillion": 0.28
+  },
+  "deepseek-r1": {
+    "inputPerMillion": 0.55,
+    "outputPerMillion": 2.19
+  },
+  "deepseek-reasoner": {
+    "cacheReadPerMillion": 0.028,
+    "inputPerMillion": 0.28,
+    "outputPerMillion": 0.42
+  },
+  "deepseek-v3": {
+    "cacheReadPerMillion": 0.07,
+    "cacheWritePerMillion": 0.0,
+    "inputPerMillion": 0.27,
+    "outputPerMillion": 1.1
+  },
+  "deepseek-v3.2": {
+    "inputPerMillion": 0.28,
+    "outputPerMillion": 0.4
+  },
+  "deepseek-v4-flash": {
+    "cacheReadPerMillion": 0.0028,
+    "cacheWritePerMillion": 0.0,
+    "inputPerMillion": 0.14,
+    "outputPerMillion": 0.28
+  },
+  "deepseek-v4-pro": {
+    "cacheReadPerMillion": 0.003625,
+    "cacheWritePerMillion": 0.0,
+    "inputPerMillion": 0.435,
+    "outputPerMillion": 0.87
+  },
+  "gemini-1.5-flash": {
+    "inputPerMillion": 0.075,
+    "outputPerMillion": 0
+  },
+  "gemini-2.0-flash": {
+    "cacheReadPerMillion": 0.025,
+    "inputPerMillion": 0.1,
+    "outputPerMillion": 0.4
+  },
+  "gemini-2.0-flash-001": {
+    "cacheReadPerMillion": 0.0375,
+    "inputPerMillion": 0.15,
+    "outputPerMillion": 0.6
+  },
+  "gemini-2.0-flash-exp-image-generation": {
+    "inputPerMillion": 0.0,
+    "outputPerMillion": 0.0
+  },
+  "gemini-2.0-flash-lite": {
+    "cacheReadPerMillion": 0.01875,
+    "inputPerMillion": 0.075,
+    "outputPerMillion": 0.3
+  },
+  "gemini-2.0-flash-lite-001": {
+    "cacheReadPerMillion": 0.01875,
+    "inputPerMillion": 0.075,
+    "outputPerMillion": 0.3
+  },
+  "gemini-2.5-computer-use-preview-10-2025": {
+    "inputPerMillion": 1.25,
+    "outputPerMillion": 10.0
+  },
+  "gemini-2.5-flash": {
+    "cacheReadPerMillion": 0.03,
+    "inputPerMillion": 0.3,
+    "outputPerMillion": 2.5
+  },
+  "gemini-2.5-flash-image": {
+    "cacheReadPerMillion": 0.03,
+    "inputPerMillion": 0.3,
+    "outputPerMillion": 2.5
+  },
+  "gemini-2.5-flash-lite": {
+    "cacheReadPerMillion": 0.01,
+    "inputPerMillion": 0.1,
+    "outputPerMillion": 0.4
+  },
+  "gemini-2.5-flash-lite-preview-06-17": {
+    "cacheReadPerMillion": 0.025,
+    "inputPerMillion": 0.1,
+    "outputPerMillion": 0.4
+  },
+  "gemini-2.5-flash-lite-preview-09-2025": {
+    "cacheReadPerMillion": 0.01,
+    "inputPerMillion": 0.1,
+    "outputPerMillion": 0.4
+  },
+  "gemini-2.5-flash-native-audio-latest": {
+    "inputPerMillion": 0.3,
+    "outputPerMillion": 2.5
+  },
+  "gemini-2.5-flash-native-audio-preview-09-2025": {
+    "inputPerMillion": 0.3,
+    "outputPerMillion": 2.5
+  },
+  "gemini-2.5-flash-native-audio-preview-12-2025": {
+    "inputPerMillion": 0.3,
+    "outputPerMillion": 2.5
+  },
+  "gemini-2.5-flash-preview-09-2025": {
+    "cacheReadPerMillion": 0.075,
+    "inputPerMillion": 0.3,
+    "outputPerMillion": 2.5
+  },
+  "gemini-2.5-flash-preview-tts": {
+    "inputPerMillion": 0.3,
+    "outputPerMillion": 2.5
+  },
+  "gemini-2.5-pro": {
+    "cacheReadPerMillion": 0.125,
+    "inputPerMillion": 1.25,
+    "outputPerMillion": 10.0
+  },
+  "gemini-2.5-pro-preview-tts": {
+    "cacheReadPerMillion": 0.125,
+    "inputPerMillion": 1.25,
+    "outputPerMillion": 10.0
+  },
+  "gemini-3-flash-preview": {
+    "cacheReadPerMillion": 0.05,
+    "inputPerMillion": 0.5,
+    "outputPerMillion": 3.0
+  },
+  "gemini-3-pro-image-preview": {
+    "inputPerMillion": 2.0,
+    "outputPerMillion": 12.0
+  },
+  "gemini-3-pro-preview": {
+    "cacheReadPerMillion": 0.2,
+    "inputPerMillion": 2.0,
+    "outputPerMillion": 12.0
+  },
+  "gemini-3.1-flash-image-preview": {
+    "inputPerMillion": 0.5,
+    "outputPerMillion": 3.0
+  },
+  "gemini-3.1-flash-lite": {
+    "cacheReadPerMillion": 0.025,
+    "inputPerMillion": 0.25,
+    "outputPerMillion": 1.5
+  },
+  "gemini-3.1-flash-lite-preview": {
+    "cacheReadPerMillion": 0.025,
+    "inputPerMillion": 0.25,
+    "outputPerMillion": 1.5
+  },
+  "gemini-3.1-flash-live-preview": {
+    "inputPerMillion": 0.75,
+    "outputPerMillion": 4.5
+  },
+  "gemini-3.1-pro-preview": {
+    "cacheReadPerMillion": 0.2,
+    "inputPerMillion": 2.0,
+    "outputPerMillion": 12.0
+  },
+  "gemini-3.1-pro-preview-customtools": {
+    "cacheReadPerMillion": 0.2,
+    "inputPerMillion": 2.0,
+    "outputPerMillion": 12.0
+  },
+  "gemini-3.5-flash": {
+    "cacheReadPerMillion": 0.15,
+    "inputPerMillion": 1.5,
+    "outputPerMillion": 9.0
+  },
+  "gemini-embedding-001": {
+    "inputPerMillion": 0.15,
+    "outputPerMillion": 0
+  },
+  "gemini-embedding-2": {
+    "inputPerMillion": 0.2,
+    "outputPerMillion": 0
+  },
+  "gemini-embedding-2-preview": {
+    "inputPerMillion": 0.2,
+    "outputPerMillion": 0
+  },
+  "gemini-exp-1114": {
+    "inputPerMillion": 0,
+    "outputPerMillion": 0
+  },
+  "gemini-exp-1206": {
+    "cacheReadPerMillion": 0.03,
+    "inputPerMillion": 0.3,
+    "outputPerMillion": 2.5
+  },
+  "gemini-flash-experimental": {
+    "inputPerMillion": 0,
+    "outputPerMillion": 0
+  },
+  "gemini-flash-latest": {
+    "cacheReadPerMillion": 0.03,
+    "inputPerMillion": 0.3,
+    "outputPerMillion": 2.5
+  },
+  "gemini-flash-lite-latest": {
+    "cacheReadPerMillion": 0.01,
+    "inputPerMillion": 0.1,
+    "outputPerMillion": 0.4
+  },
+  "gemini-gemma-2-27b-it": {
+    "inputPerMillion": 0.35,
+    "outputPerMillion": 1.05
+  },
+  "gemini-gemma-2-9b-it": {
+    "inputPerMillion": 0.35,
+    "outputPerMillion": 1.05
+  },
+  "gemini-live-2.5-flash-preview-native-audio-09-2025": {
+    "cacheReadPerMillion": 0.075,
+    "inputPerMillion": 0.3,
+    "outputPerMillion": 2.0
+  },
+  "gemini-pro-latest": {
+    "cacheReadPerMillion": 0.125,
+    "inputPerMillion": 1.25,
+    "outputPerMillion": 10.0
+  },
+  "gemini-robotics-er-1.5-preview": {
+    "cacheReadPerMillion": 0,
+    "inputPerMillion": 0.3,
+    "outputPerMillion": 2.5
+  },
+  "gpt-4": {
+    "inputPerMillion": 30.0,
+    "outputPerMillion": 60.0
+  },
+  "gpt-4-0125-preview": {
+    "inputPerMillion": 10.0,
+    "outputPerMillion": 30.0
+  },
+  "gpt-4-0314": {
+    "inputPerMillion": 30.0,
+    "outputPerMillion": 60.0
+  },
+  "gpt-4-0613": {
+    "inputPerMillion": 30.0,
+    "outputPerMillion": 60.0
+  },
+  "gpt-4-1106-preview": {
+    "inputPerMillion": 10.0,
+    "outputPerMillion": 30.0
+  },
+  "gpt-4-turbo": {
+    "inputPerMillion": 10.0,
+    "outputPerMillion": 30.0
+  },
+  "gpt-4-turbo-2024-04-09": {
+    "inputPerMillion": 10.0,
+    "outputPerMillion": 30.0
+  },
+  "gpt-4-turbo-preview": {
+    "inputPerMillion": 10.0,
+    "outputPerMillion": 30.0
+  },
+  "gpt-4.1": {
+    "cacheReadPerMillion": 0.5,
+    "inputPerMillion": 2.0,
+    "outputPerMillion": 8.0
+  },
+  "gpt-4.1-2025-04-14": {
+    "cacheReadPerMillion": 0.5,
+    "inputPerMillion": 2.0,
+    "outputPerMillion": 8.0
+  },
+  "gpt-4.1-mini": {
+    "cacheReadPerMillion": 0.1,
+    "inputPerMillion": 0.4,
+    "outputPerMillion": 1.6
+  },
+  "gpt-4.1-mini-2025-04-14": {
+    "cacheReadPerMillion": 0.1,
+    "inputPerMillion": 0.4,
+    "outputPerMillion": 1.6
+  },
+  "gpt-4.1-nano": {
+    "cacheReadPerMillion": 0.025,
+    "inputPerMillion": 0.1,
+    "outputPerMillion": 0.4
+  },
+  "gpt-4.1-nano-2025-04-14": {
+    "cacheReadPerMillion": 0.025,
+    "inputPerMillion": 0.1,
+    "outputPerMillion": 0.4
+  },
+  "gpt-4o": {
+    "cacheReadPerMillion": 1.25,
+    "inputPerMillion": 2.5,
+    "outputPerMillion": 10.0
+  },
+  "gpt-4o-2024-05-13": {
+    "inputPerMillion": 5.0,
+    "outputPerMillion": 15.0
+  },
+  "gpt-4o-2024-08-06": {
+    "cacheReadPerMillion": 1.25,
+    "inputPerMillion": 2.5,
+    "outputPerMillion": 10.0
+  },
+  "gpt-4o-2024-11-20": {
+    "cacheReadPerMillion": 1.25,
+    "inputPerMillion": 2.5,
+    "outputPerMillion": 10.0
+  },
+  "gpt-4o-audio-preview": {
+    "inputPerMillion": 2.5,
+    "outputPerMillion": 10.0
+  },
+  "gpt-4o-audio-preview-2024-12-17": {
+    "inputPerMillion": 2.5,
+    "outputPerMillion": 10.0
+  },
+  "gpt-4o-audio-preview-2025-06-03": {
+    "inputPerMillion": 2.5,
+    "outputPerMillion": 10.0
+  },
+  "gpt-4o-mini": {
+    "cacheReadPerMillion": 0.075,
+    "inputPerMillion": 0.15,
+    "outputPerMillion": 0.6
+  },
+  "gpt-4o-mini-2024-07-18": {
+    "cacheReadPerMillion": 0.075,
+    "inputPerMillion": 0.15,
+    "outputPerMillion": 0.6
+  },
+  "gpt-4o-mini-audio-preview": {
+    "inputPerMillion": 0.15,
+    "outputPerMillion": 0.6
+  },
+  "gpt-4o-mini-audio-preview-2024-12-17": {
+    "inputPerMillion": 0.15,
+    "outputPerMillion": 0.6
+  },
+  "gpt-4o-mini-realtime-preview": {
+    "cacheReadPerMillion": 0.3,
+    "inputPerMillion": 0.6,
+    "outputPerMillion": 2.4
+  },
+  "gpt-4o-mini-realtime-preview-2024-12-17": {
+    "cacheReadPerMillion": 0.3,
+    "inputPerMillion": 0.6,
+    "outputPerMillion": 2.4
+  },
+  "gpt-4o-mini-search-preview": {
+    "cacheReadPerMillion": 0.075,
+    "inputPerMillion": 0.15,
+    "outputPerMillion": 0.6
+  },
+  "gpt-4o-mini-search-preview-2025-03-11": {
+    "cacheReadPerMillion": 0.075,
+    "inputPerMillion": 0.15,
+    "outputPerMillion": 0.6
+  },
+  "gpt-4o-mini-transcribe": {
+    "inputPerMillion": 1.25,
+    "outputPerMillion": 5.0
+  },
+  "gpt-4o-mini-transcribe-2025-03-20": {
+    "inputPerMillion": 1.25,
+    "outputPerMillion": 5.0
+  },
+  "gpt-4o-mini-transcribe-2025-12-15": {
+    "inputPerMillion": 1.25,
+    "outputPerMillion": 5.0
+  },
+  "gpt-4o-mini-tts": {
+    "inputPerMillion": 2.5,
+    "outputPerMillion": 10.0
+  },
+  "gpt-4o-mini-tts-2025-03-20": {
+    "inputPerMillion": 2.5,
+    "outputPerMillion": 10.0
+  },
+  "gpt-4o-mini-tts-2025-12-15": {
+    "inputPerMillion": 2.5,
+    "outputPerMillion": 10.0
+  },
+  "gpt-4o-realtime-preview": {
+    "cacheReadPerMillion": 2.5,
+    "inputPerMillion": 5.0,
+    "outputPerMillion": 20.0
+  },
+  "gpt-4o-realtime-preview-2024-12-17": {
+    "cacheReadPerMillion": 2.5,
+    "inputPerMillion": 5.0,
+    "outputPerMillion": 20.0
+  },
+  "gpt-4o-realtime-preview-2025-06-03": {
+    "cacheReadPerMillion": 2.5,
+    "inputPerMillion": 5.0,
+    "outputPerMillion": 20.0
+  },
+  "gpt-4o-search-preview": {
+    "cacheReadPerMillion": 1.25,
+    "inputPerMillion": 2.5,
+    "outputPerMillion": 10.0
+  },
+  "gpt-4o-search-preview-2025-03-11": {
+    "cacheReadPerMillion": 1.25,
+    "inputPerMillion": 2.5,
+    "outputPerMillion": 10.0
+  },
+  "gpt-4o-transcribe": {
+    "inputPerMillion": 2.5,
+    "outputPerMillion": 10.0
+  },
+  "gpt-4o-transcribe-diarize": {
+    "inputPerMillion": 2.5,
+    "outputPerMillion": 10.0
+  },
   "gpt-5": {
     "cacheReadPerMillion": 0.125,
     "inputPerMillion": 1.25,
@@ -297,6 +718,260 @@
     "inputPerMillion": 30.0,
     "outputPerMillion": 180.0
   },
+  "grok-2": {
+    "inputPerMillion": 2.0,
+    "outputPerMillion": 10.0
+  },
+  "grok-2-1212": {
+    "inputPerMillion": 2.0,
+    "outputPerMillion": 10.0
+  },
+  "grok-2-latest": {
+    "inputPerMillion": 2.0,
+    "outputPerMillion": 10.0
+  },
+  "grok-2-vision": {
+    "inputPerMillion": 2.0,
+    "outputPerMillion": 10.0
+  },
+  "grok-2-vision-1212": {
+    "inputPerMillion": 2.0,
+    "outputPerMillion": 10.0
+  },
+  "grok-2-vision-latest": {
+    "inputPerMillion": 2.0,
+    "outputPerMillion": 10.0
+  },
+  "grok-3": {
+    "cacheReadPerMillion": 0.75,
+    "inputPerMillion": 3.0,
+    "outputPerMillion": 15.0
+  },
+  "grok-3-beta": {
+    "cacheReadPerMillion": 0.75,
+    "inputPerMillion": 3.0,
+    "outputPerMillion": 15.0
+  },
+  "grok-3-fast-beta": {
+    "cacheReadPerMillion": 1.25,
+    "inputPerMillion": 5.0,
+    "outputPerMillion": 25.0
+  },
+  "grok-3-fast-latest": {
+    "cacheReadPerMillion": 1.25,
+    "inputPerMillion": 5.0,
+    "outputPerMillion": 25.0
+  },
+  "grok-3-latest": {
+    "cacheReadPerMillion": 0.75,
+    "inputPerMillion": 3.0,
+    "outputPerMillion": 15.0
+  },
+  "grok-3-mini": {
+    "cacheReadPerMillion": 0.075,
+    "inputPerMillion": 0.3,
+    "outputPerMillion": 0.5
+  },
+  "grok-3-mini-beta": {
+    "cacheReadPerMillion": 0.075,
+    "inputPerMillion": 0.3,
+    "outputPerMillion": 0.5
+  },
+  "grok-3-mini-fast": {
+    "cacheReadPerMillion": 0.15,
+    "inputPerMillion": 0.6,
+    "outputPerMillion": 4.0
+  },
+  "grok-3-mini-fast-beta": {
+    "cacheReadPerMillion": 0.15,
+    "inputPerMillion": 0.6,
+    "outputPerMillion": 4.0
+  },
+  "grok-3-mini-fast-latest": {
+    "cacheReadPerMillion": 0.15,
+    "inputPerMillion": 0.6,
+    "outputPerMillion": 4.0
+  },
+  "grok-3-mini-latest": {
+    "cacheReadPerMillion": 0.075,
+    "inputPerMillion": 0.3,
+    "outputPerMillion": 0.5
+  },
+  "grok-4": {
+    "inputPerMillion": 3.0,
+    "outputPerMillion": 15.0
+  },
+  "grok-4-0709": {
+    "inputPerMillion": 3.0,
+    "outputPerMillion": 15.0
+  },
+  "grok-4-1-fast": {
+    "cacheReadPerMillion": 0.05,
+    "inputPerMillion": 0.2,
+    "outputPerMillion": 0.5
+  },
+  "grok-4-1-fast-non-reasoning": {
+    "cacheReadPerMillion": 0.05,
+    "inputPerMillion": 0.2,
+    "outputPerMillion": 0.5
+  },
+  "grok-4-1-fast-non-reasoning-latest": {
+    "cacheReadPerMillion": 0.05,
+    "inputPerMillion": 0.2,
+    "outputPerMillion": 0.5
+  },
+  "grok-4-1-fast-reasoning": {
+    "cacheReadPerMillion": 0.05,
+    "inputPerMillion": 0.2,
+    "outputPerMillion": 0.5
+  },
+  "grok-4-1-fast-reasoning-latest": {
+    "cacheReadPerMillion": 0.05,
+    "inputPerMillion": 0.2,
+    "outputPerMillion": 0.5
+  },
+  "grok-4-fast-non-reasoning": {
+    "cacheReadPerMillion": 0.05,
+    "inputPerMillion": 0.2,
+    "outputPerMillion": 0.5
+  },
+  "grok-4-fast-reasoning": {
+    "cacheReadPerMillion": 0.05,
+    "inputPerMillion": 0.2,
+    "outputPerMillion": 0.5
+  },
+  "grok-4-latest": {
+    "inputPerMillion": 3.0,
+    "outputPerMillion": 15.0
+  },
+  "grok-4.20-0309-reasoning": {
+    "cacheReadPerMillion": 0.2,
+    "inputPerMillion": 2.0,
+    "outputPerMillion": 6.0
+  },
+  "grok-4.20-beta-0309-non-reasoning": {
+    "cacheReadPerMillion": 0.2,
+    "inputPerMillion": 2.0,
+    "outputPerMillion": 6.0
+  },
+  "grok-4.20-beta-0309-reasoning": {
+    "cacheReadPerMillion": 0.2,
+    "inputPerMillion": 2.0,
+    "outputPerMillion": 6.0
+  },
+  "grok-4.20-multi-agent-beta-0309": {
+    "cacheReadPerMillion": 0.2,
+    "inputPerMillion": 2.0,
+    "outputPerMillion": 6.0
+  },
+  "grok-4.3": {
+    "cacheReadPerMillion": 0.2,
+    "inputPerMillion": 1.25,
+    "outputPerMillion": 2.5
+  },
+  "grok-4.3-latest": {
+    "cacheReadPerMillion": 0.2,
+    "inputPerMillion": 1.25,
+    "outputPerMillion": 2.5
+  },
+  "grok-beta": {
+    "inputPerMillion": 5.0,
+    "outputPerMillion": 15.0
+  },
+  "grok-code-fast": {
+    "cacheReadPerMillion": 0.02,
+    "inputPerMillion": 0.2,
+    "outputPerMillion": 1.5
+  },
+  "grok-code-fast-1": {
+    "cacheReadPerMillion": 0.02,
+    "inputPerMillion": 0.2,
+    "outputPerMillion": 1.5
+  },
+  "grok-code-fast-1-0825": {
+    "cacheReadPerMillion": 0.02,
+    "inputPerMillion": 0.2,
+    "outputPerMillion": 1.5
+  },
+  "grok-vision-beta": {
+    "inputPerMillion": 5.0,
+    "outputPerMillion": 15.0
+  },
+  "kimi-k2": {
+    "cacheReadPerMillion": 0.15,
+    "inputPerMillion": 0.6,
+    "outputPerMillion": 2.5
+  },
+  "kimi-k2-0711-preview": {
+    "cacheReadPerMillion": 0.15,
+    "inputPerMillion": 0.6,
+    "outputPerMillion": 2.5
+  },
+  "kimi-k2-0905-preview": {
+    "cacheReadPerMillion": 0.15,
+    "inputPerMillion": 0.6,
+    "outputPerMillion": 2.5
+  },
+  "kimi-k2-thinking": {
+    "cacheReadPerMillion": 0.15,
+    "inputPerMillion": 0.6,
+    "outputPerMillion": 2.5
+  },
+  "kimi-k2-thinking-turbo": {
+    "cacheReadPerMillion": 0.15,
+    "inputPerMillion": 1.15,
+    "outputPerMillion": 8.0
+  },
+  "kimi-k2-turbo-preview": {
+    "cacheReadPerMillion": 0.15,
+    "inputPerMillion": 1.15,
+    "outputPerMillion": 8.0
+  },
+  "kimi-k2.5": {
+    "cacheReadPerMillion": 0.1,
+    "inputPerMillion": 0.6,
+    "outputPerMillion": 3.0
+  },
+  "kimi-k2.6": {
+    "cacheReadPerMillion": 0.16,
+    "inputPerMillion": 0.95,
+    "outputPerMillion": 4.0
+  },
+  "kimi-latest": {
+    "cacheReadPerMillion": 0.15,
+    "inputPerMillion": 2.0,
+    "outputPerMillion": 5.0
+  },
+  "kimi-latest-128k": {
+    "cacheReadPerMillion": 0.15,
+    "inputPerMillion": 2.0,
+    "outputPerMillion": 5.0
+  },
+  "kimi-latest-32k": {
+    "cacheReadPerMillion": 0.15,
+    "inputPerMillion": 1.0,
+    "outputPerMillion": 3.0
+  },
+  "kimi-latest-8k": {
+    "cacheReadPerMillion": 0.15,
+    "inputPerMillion": 0.2,
+    "outputPerMillion": 2.0
+  },
+  "kimi-thinking-preview": {
+    "cacheReadPerMillion": 0.15,
+    "inputPerMillion": 0.6,
+    "outputPerMillion": 2.5
+  },
+  "mai-code-1-flash": {
+    "cacheReadPerMillion": 0.075,
+    "inputPerMillion": 0.75,
+    "outputPerMillion": 4.5
+  },
+  "mai-code-1-flash-internal": {
+    "cacheReadPerMillion": 0.075,
+    "inputPerMillion": 0.75,
+    "outputPerMillion": 4.5
+  },
   "o1": {
     "cacheReadPerMillion": 7.5,
     "inputPerMillion": 15.0,
@@ -372,5 +1047,121 @@
     "cacheReadPerMillion": 0.5,
     "inputPerMillion": 2.0,
     "outputPerMillion": 8.0
+  },
+  "qwen-2.5-coder-32b-instruct": {
+    "inputPerMillion": 0.18,
+    "outputPerMillion": 0.18
+  },
+  "qwen-coder": {
+    "inputPerMillion": 0.3,
+    "outputPerMillion": 1.5
+  },
+  "qwen-max": {
+    "inputPerMillion": 1.6,
+    "outputPerMillion": 6.4
+  },
+  "qwen-plus": {
+    "inputPerMillion": 0.4,
+    "outputPerMillion": 1.2
+  },
+  "qwen-plus-2025-01-25": {
+    "inputPerMillion": 0.4,
+    "outputPerMillion": 1.2
+  },
+  "qwen-plus-2025-04-28": {
+    "inputPerMillion": 0.4,
+    "outputPerMillion": 1.2
+  },
+  "qwen-plus-2025-07-14": {
+    "inputPerMillion": 0.4,
+    "outputPerMillion": 1.2
+  },
+  "qwen-turbo": {
+    "inputPerMillion": 0.05,
+    "outputPerMillion": 0.2
+  },
+  "qwen-turbo-2024-11-01": {
+    "inputPerMillion": 0.05,
+    "outputPerMillion": 0.2
+  },
+  "qwen-turbo-2025-04-28": {
+    "inputPerMillion": 0.05,
+    "outputPerMillion": 0.2
+  },
+  "qwen-turbo-latest": {
+    "inputPerMillion": 0.05,
+    "outputPerMillion": 0.2
+  },
+  "qwen-vl-plus": {
+    "inputPerMillion": 0.21,
+    "outputPerMillion": 0.63
+  },
+  "qwen3-235b-a22b-2507": {
+    "inputPerMillion": 0.071,
+    "outputPerMillion": 0.1
+  },
+  "qwen3-235b-a22b-thinking-2507": {
+    "inputPerMillion": 0.11,
+    "outputPerMillion": 0.6
+  },
+  "qwen3-coder": {
+    "inputPerMillion": 0.22,
+    "outputPerMillion": 0.95
+  },
+  "qwen3-coder-plus": {
+    "inputPerMillion": 1.0,
+    "outputPerMillion": 5.0
+  },
+  "qwen3-next-80b-a3b-instruct": {
+    "inputPerMillion": 0.15,
+    "outputPerMillion": 1.2
+  },
+  "qwen3-next-80b-a3b-thinking": {
+    "inputPerMillion": 0.15,
+    "outputPerMillion": 1.2
+  },
+  "qwen3-vl-235b-a22b-instruct": {
+    "inputPerMillion": 0.4,
+    "outputPerMillion": 1.6
+  },
+  "qwen3-vl-235b-a22b-thinking": {
+    "inputPerMillion": 0.4,
+    "outputPerMillion": 4.0
+  },
+  "qwen3-vl-32b-instruct": {
+    "inputPerMillion": 0.16,
+    "outputPerMillion": 0.64
+  },
+  "qwen3-vl-32b-thinking": {
+    "inputPerMillion": 0.16,
+    "outputPerMillion": 2.87
+  },
+  "qwen3.5-122b-a10b": {
+    "inputPerMillion": 0.4,
+    "outputPerMillion": 2.0
+  },
+  "qwen3.5-27b": {
+    "inputPerMillion": 0.3,
+    "outputPerMillion": 2.4
+  },
+  "qwen3.5-35b-a3b": {
+    "inputPerMillion": 0.25,
+    "outputPerMillion": 2.0
+  },
+  "qwen3.5-397b-a17b": {
+    "inputPerMillion": 0.6,
+    "outputPerMillion": 3.6
+  },
+  "qwen3.5-flash-02-23": {
+    "inputPerMillion": 0.1,
+    "outputPerMillion": 0.4
+  },
+  "qwen3.5-plus-02-15": {
+    "inputPerMillion": 0.4,
+    "outputPerMillion": 2.4
+  },
+  "qwen3.6-plus": {
+    "inputPerMillion": 0.325,
+    "outputPerMillion": 1.95
   }
 }
