@@ -25,7 +25,7 @@ struct VibeUsagePreviewRenderer {
                 selectedDateRange: .constant(.today),
                 onRefresh: {},
                 onFilterChange: {},
-                onAgentVisibilityCommit: { _ in },
+                onAgentDisplayCommit: { _ in },
                 onQuit: {}
             )
         }
