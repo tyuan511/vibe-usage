@@ -23,6 +23,7 @@ struct VibeUsagePreviewRenderer {
                 configurableAgentSources: sources,
                 hiddenAgentSourceIDs: [],
                 selectedDateRange: .constant(.today),
+                selectedModelFilter: .constant([]),
                 onRefresh: {},
                 onFilterChange: {},
                 onAgentDisplayCommit: { _ in },

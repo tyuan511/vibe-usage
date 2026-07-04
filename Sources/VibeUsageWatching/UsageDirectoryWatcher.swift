@@ -1,14 +1,18 @@
 import CoreServices
 import Foundation
+import os
 
 /// Watches adapter log root directories with FSEvents and reports coarse-grained
 /// "something may have changed" signals. Callers should debounce before rescanning.
 final class UsageDirectoryWatcher: @unchecked Sendable {
+    private static let logger = Logger(subsystem: "com.vibeusage", category: "DirectoryWatcher")
+
     private let queue = DispatchQueue(label: "com.vibeusage.directory-watcher")
     private let onChange: @Sendable () -> Void
     private let lock = NSLock()
     private var stream: FSEventStreamRef?
     private var paths: [String] = []
+    private(set) var isWatching = false
 
     init(onChange: @escaping @Sendable () -> Void) {
         self.onChange = onChange
@@ -34,7 +38,10 @@ final class UsageDirectoryWatcher: @unchecked Sendable {
 
     private func restartStreamLocked() {
         stopLocked()
-        guard !paths.isEmpty else { return }
+        guard !paths.isEmpty else {
+            isWatching = false
+            return
+        }
 
         var context = FSEventStreamContext(
             version: 0,
@@ -57,20 +64,29 @@ final class UsageDirectoryWatcher: @unchecked Sendable {
             2.0,
             flags
         ) else {
+            isWatching = false
+            Self.logger.error(
+                "Failed to create FSEventStream for paths: \(self.paths.joined(separator: ", "), privacy: .public). Falling back to periodic refresh only."
+            )
             return
         }
 
         FSEventStreamSetDispatchQueue(stream, queue)
         FSEventStreamStart(stream)
         self.stream = stream
+        isWatching = true
     }
 
     private func stopLocked() {
-        guard let stream else { return }
+        guard let stream else {
+            isWatching = false
+            return
+        }
         FSEventStreamStop(stream)
         FSEventStreamInvalidate(stream)
         FSEventStreamRelease(stream)
         self.stream = nil
+        isWatching = false
     }
 
     fileprivate func handleChange() {

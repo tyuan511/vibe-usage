@@ -1,5 +1,6 @@
 import Foundation
 import GRDB
+import VibeUsageCore
 
 /// Owns the SQLite connection and schema migrations for VibeUsage's local
 /// cache. Named `UsageDatabase` (rather than `Database`) to avoid shadowing
@@ -10,21 +11,29 @@ public final class UsageDatabase: Sendable {
     /// Opens (creating if necessary) the database file at `path` and applies
     /// any pending migrations.
     public init(path: String) throws {
-        var config = Configuration()
-        config.foreignKeysEnabled = true
-        config.prepareDatabase { db in
-            try db.execute(sql: "PRAGMA journal_mode = WAL")
+        do {
+            var config = Configuration()
+            config.foreignKeysEnabled = true
+            config.prepareDatabase { db in
+                try db.execute(sql: "PRAGMA journal_mode = WAL")
+            }
+            dbQueue = try DatabaseQueue(path: path, configuration: config)
+            try Self.migrator.migrate(dbQueue)
+        } catch {
+            throw VibeUsageError.databaseError(underlying: error.localizedDescription)
         }
-        dbQueue = try DatabaseQueue(path: path, configuration: config)
-        try Self.migrator.migrate(dbQueue)
     }
 
     /// In-memory database for tests and previews.
     public init() throws {
-        var config = Configuration()
-        config.foreignKeysEnabled = true
-        dbQueue = try DatabaseQueue(configuration: config)
-        try Self.migrator.migrate(dbQueue)
+        do {
+            var config = Configuration()
+            config.foreignKeysEnabled = true
+            dbQueue = try DatabaseQueue(configuration: config)
+            try Self.migrator.migrate(dbQueue)
+        } catch {
+            throw VibeUsageError.databaseError(underlying: error.localizedDescription)
+        }
     }
 
     private static var migrator: DatabaseMigrator {

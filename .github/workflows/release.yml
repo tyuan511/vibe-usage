@@ -27,6 +27,8 @@ jobs:
         run: swift test
 
       - name: Build DMG
+        env:
+          SIGN_IDENTITY: ${{ secrets.SIGN_IDENTITY }}
         run: Scripts/package-dmg.sh release
 
       - name: Publish release

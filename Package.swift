@@ -57,7 +57,7 @@ let package = Package(
         ),
         .testTarget(
             name: "VibeUsageWatchingTests",
-            dependencies: ["VibeUsageWatching"]
+            dependencies: ["VibeUsageWatching", "VibeUsageStorage", "VibeUsagePricing"]
         ),
 
         // MARK: - Aggregation (rollup queries -> DTOs, sits on Storage)

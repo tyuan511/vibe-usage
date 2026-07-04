@@ -168,7 +168,8 @@ public final class GRDBUsageEventStore: UsageEventStore, Sendable {
                         reasoning: row["reasoning"]
                     ),
                     costUSD: Decimal(row["cost"] as Double),
-                    eventCount: row["eventCount"]
+                    eventCount: row["eventCount"],
+                    estimatedEventCount: row["estimatedEvents"]
                 )
             }
         }
@@ -227,7 +228,8 @@ public final class GRDBUsageEventStore: UsageEventStore, Sendable {
                SUM(cache_read_tokens) AS cacheRead,
                SUM(reasoning_tokens) AS reasoning,
                SUM(cost_usd) AS cost,
-               COUNT(*) AS eventCount
+               COUNT(*) AS eventCount,
+               SUM(CASE WHEN cost_is_estimated = 1 THEN 1 ELSE 0 END) AS estimatedEvents
         FROM usage_event
         WHERE substr(timestamp_utc, 1, 10) BETWEEN ? AND ?
         \(sourceFilterClause(sourceFilter))
@@ -251,4 +253,5 @@ public struct ModelBreakdownRow: Sendable, Equatable {
     public let tokens: TokenCounts
     public let costUSD: Decimal
     public let eventCount: Int
+    public let estimatedEventCount: Int
 }

@@ -18,10 +18,12 @@ public struct SourceUsageSummary: Identifiable, Sendable, Equatable {
     public var id: AgentSourceID { descriptor.id }
     public let descriptor: AgentSourceDescriptor
     public let totals: UsageTotals
+    public let hasEstimatedCost: Bool
 
-    public init(descriptor: AgentSourceDescriptor, totals: UsageTotals) {
+    public init(descriptor: AgentSourceDescriptor, totals: UsageTotals, hasEstimatedCost: Bool = false) {
         self.descriptor = descriptor
         self.totals = totals
+        self.hasEstimatedCost = hasEstimatedCost
     }
 }
 
@@ -47,19 +49,22 @@ public struct ModelUsageSummary: Identifiable, Sendable, Equatable {
     public let tokens: TokenCounts
     public let costUSD: Decimal
     public let eventCount: Int
+    public let hasEstimatedCost: Bool
 
     public init(
         modelFamily: String,
         sourceID: AgentSourceID,
         tokens: TokenCounts,
         costUSD: Decimal,
-        eventCount: Int
+        eventCount: Int,
+        hasEstimatedCost: Bool = false
     ) {
         self.modelFamily = modelFamily
         self.sourceID = sourceID
         self.tokens = tokens
         self.costUSD = costUSD
         self.eventCount = eventCount
+        self.hasEstimatedCost = hasEstimatedCost
     }
 }
 
@@ -206,6 +211,7 @@ public final class UsageAggregationService: Sendable {
         let descriptorsByID = Dictionary(uniqueKeysWithValues: descriptors.map { ($0.id, $0) })
 
         var totalsBySource: [AgentSourceID: UsageTotalsAccumulator] = [:]
+        var estimatedBySource: [AgentSourceID: Bool] = [:]
         var grand = UsageTotalsAccumulator()
         for row in dailyRows {
             totalsBySource[row.sourceID, default: UsageTotalsAccumulator()].add(tokens: row.tokens, cost: row.costUSD, events: 0)
@@ -214,14 +220,20 @@ public final class UsageAggregationService: Sendable {
         for row in modelRows {
             totalsBySource[row.sourceID, default: UsageTotalsAccumulator()].eventCount += row.eventCount
             grand.eventCount += row.eventCount
+            if row.estimatedEventCount > 0 {
+                estimatedBySource[row.sourceID] = true
+            }
         }
 
         let sourceSummaries = descriptors
             .filter { effectiveSourceFilter.isEmpty || effectiveSourceFilter.contains($0.id) }
-            .map { descriptor in
-                SourceUsageSummary(
+            .compactMap { descriptor -> SourceUsageSummary? in
+                let totals = totalsBySource[descriptor.id]?.totals ?? UsageTotals()
+                guard totals.eventCount > 0 || totals.tokens.total > 0 else { return nil }
+                return SourceUsageSummary(
                     descriptor: descriptor,
-                    totals: totalsBySource[descriptor.id]?.totals ?? UsageTotals()
+                    totals: totals,
+                    hasEstimatedCost: estimatedBySource[descriptor.id] ?? false
                 )
             }
 
@@ -243,7 +255,8 @@ public final class UsageAggregationService: Sendable {
                     sourceID: descriptorsByID[$0.sourceID]?.id ?? $0.sourceID,
                     tokens: $0.tokens,
                     costUSD: $0.costUSD,
-                    eventCount: $0.eventCount
+                    eventCount: $0.eventCount,
+                    hasEstimatedCost: $0.estimatedEventCount > 0
                 )
             },
             availableModels: availableModelRows.map {
@@ -252,7 +265,8 @@ public final class UsageAggregationService: Sendable {
                     sourceID: descriptorsByID[$0.sourceID]?.id ?? $0.sourceID,
                     tokens: $0.tokens,
                     costUSD: $0.costUSD,
-                    eventCount: $0.eventCount
+                    eventCount: $0.eventCount,
+                    hasEstimatedCost: $0.estimatedEventCount > 0
                 )
             },
             discoveredSources: descriptors.filter { effectiveSourceFilter.isEmpty || effectiveSourceFilter.contains($0.id) }

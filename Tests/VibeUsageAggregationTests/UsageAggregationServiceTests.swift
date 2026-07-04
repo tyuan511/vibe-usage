@@ -77,8 +77,75 @@ import VibeUsageStorage
 
     #expect(noLocalSources.sources.isEmpty)
     #expect(noLocalSources.totals.eventCount == 0)
-    #expect(codexOnly.sources.map(\.id) == [.codexCLI])
+    #expect(codexOnly.sources.isEmpty)
     #expect(codexOnly.totals.eventCount == 0)
+}
+
+@Test func dashboardSnapshotHidesZeroActivitySources() throws {
+    let registry = AdapterRegistry()
+    let claude = AgentSourceDescriptor(
+        id: .claudeCode,
+        displayName: "Claude Code",
+        shortLabel: "Claude",
+        iconSystemName: "sparkles",
+        tintColorHex: "#C15F3C",
+        sortOrder: 0
+    )
+    let codex = AgentSourceDescriptor(
+        id: .codexCLI,
+        displayName: "Codex CLI",
+        shortLabel: "Codex",
+        iconSystemName: "terminal",
+        tintColorHex: "#2D7D72",
+        sortOrder: 1
+    )
+    registry.register(EmptyAdapter(descriptor: claude))
+    registry.register(EmptyAdapter(descriptor: codex))
+
+    let store = GRDBUsageEventStore(database: try UsageDatabase())
+    try store.ensureSourceRegistered(claude)
+    try store.applyParseResult(
+        ParseResult(events: [usageEvent()], newCheckpoint: .start),
+        file: DiscoveredFile(path: "/tmp/usage.jsonl", sourceID: .claudeCode),
+        fileSize: 1,
+        fileModifiedAt: nil
+    )
+
+    let service = UsageAggregationService(store: store, registry: registry)
+    let snapshot = try service.dashboardSnapshot(
+        visibleSourceFilter: [.claudeCode, .codexCLI],
+        now: Date(timeIntervalSince1970: 1_700_000_000)
+    )
+
+    #expect(snapshot.sources.map(\.id) == [.claudeCode])
+}
+
+@Test func dashboardSnapshotMarksEstimatedModelCosts() throws {
+    let registry = AdapterRegistry()
+    let descriptor = AgentSourceDescriptor(
+        id: .claudeCode,
+        displayName: "Claude Code",
+        shortLabel: "Claude",
+        iconSystemName: "sparkles",
+        tintColorHex: "#C15F3C",
+        sortOrder: 0
+    )
+    registry.register(EmptyAdapter(descriptor: descriptor))
+
+    let store = GRDBUsageEventStore(database: try UsageDatabase())
+    try store.ensureSourceRegistered(descriptor)
+    try store.applyParseResult(
+        ParseResult(events: [usageEvent(costIsEstimated: true)], newCheckpoint: .start),
+        file: DiscoveredFile(path: "/tmp/usage.jsonl", sourceID: .claudeCode),
+        fileSize: 1,
+        fileModifiedAt: nil
+    )
+
+    let service = UsageAggregationService(store: store, registry: registry)
+    let snapshot = try service.dashboardSnapshot(now: Date(timeIntervalSince1970: 1_700_000_000))
+
+    #expect(snapshot.sources.first?.hasEstimatedCost == true)
+    #expect(snapshot.models.first?.hasEstimatedCost == true)
 }
 
 @Test func dateRangePresetsResolveExpectedLocalDays() throws {
@@ -109,7 +176,7 @@ private struct EmptyAdapter: UsageSourceAdapter {
     }
 }
 
-private func usageEvent() -> UsageEvent {
+private func usageEvent(costIsEstimated: Bool = false) -> UsageEvent {
     UsageEvent(
         sourceID: .claudeCode,
         timestamp: Date(timeIntervalSince1970: 1_700_000_000),
@@ -120,7 +187,7 @@ private func usageEvent() -> UsageEvent {
         modelFamily: "claude-sonnet-4",
         tokens: TokenCounts(input: 100, output: 50),
         costUSD: 1,
-        costIsEstimated: false,
+        costIsEstimated: costIsEstimated,
         dedupKey: "event",
         sourceFilePath: "/tmp/usage.jsonl",
         sourceFileLine: 1

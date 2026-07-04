@@ -18,6 +18,10 @@ enum UIStrings {
     static let agents = text(zh: "Agents", en: "Agents")
     static let models = text(zh: "模型", en: "Models")
     static let done = text(zh: "完成", en: "Done")
+    static let estimatedCost = text(zh: "估算", en: "Est.")
+    static let allModels = text(zh: "全部模型", en: "All Models")
+    static let lessActivity = text(zh: "少", en: "Less")
+    static let moreActivity = text(zh: "多", en: "More")
 
     static func updated(_ date: Date) -> String {
         text(
@@ -32,5 +36,9 @@ enum UIStrings {
 
     static func modelTokenLine(sourceID: String, tokens: String) -> String {
         text(zh: "\(sourceID) · \(tokens) tokens", en: "\(sourceID) · \(tokens) tokens")
+    }
+
+    static func costLabel(_ amount: String, estimated: Bool) -> String {
+        estimated ? text(zh: "\(amount) (估算)", en: "\(amount) (est.)") : amount
     }
 }

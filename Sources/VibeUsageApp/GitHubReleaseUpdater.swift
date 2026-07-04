@@ -13,7 +13,7 @@ enum GitHubReleaseUpdater {
     }()
 
     static func checkForUpdates() async {
-        guard let current = AppVersion.current,
+        guard let current = BundleAppVersion.current,
               let release = try? await latestRelease(),
               let latest = AppVersion(release.tagName),
               latest > current else {
@@ -85,53 +85,11 @@ private struct GitHubReleaseAsset: Decodable {
     }
 }
 
-private struct AppVersion: Comparable, CustomStringConvertible {
-    let components: [Int]
-
+private enum BundleAppVersion {
     static var current: AppVersion? {
         guard let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String else {
             return nil
         }
         return AppVersion(version)
-    }
-
-    init?(_ rawValue: String) {
-        let normalized = rawValue
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .trimmingPrefix("v")
-            .split(separator: "-", maxSplits: 1)
-            .first
-            .map(String.init) ?? ""
-        let parsed = normalized
-            .split(separator: ".")
-            .map { component in
-                component.prefix { $0.isNumber }
-            }
-            .compactMap { Int($0) }
-
-        guard !parsed.isEmpty else { return nil }
-        self.components = parsed
-    }
-
-    var description: String {
-        components.map(String.init).joined(separator: ".")
-    }
-
-    static func < (lhs: AppVersion, rhs: AppVersion) -> Bool {
-        let count = max(lhs.components.count, rhs.components.count)
-        for index in 0..<count {
-            let left = index < lhs.components.count ? lhs.components[index] : 0
-            let right = index < rhs.components.count ? rhs.components[index] : 0
-            if left != right {
-                return left < right
-            }
-        }
-        return false
-    }
-}
-
-private extension String {
-    func trimmingPrefix(_ prefix: String) -> String {
-        hasPrefix(prefix) ? String(dropFirst(prefix.count)) : self
     }
 }

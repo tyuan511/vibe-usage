@@ -27,7 +27,7 @@ struct SourceMetricRow: View {
                 .lineLimit(1)
             Spacer()
             VStack(alignment: .trailing, spacing: 1) {
-                Text(source.totals.costUSD.usdString)
+                Text(UIStrings.costLabel(source.totals.costUSD.usdString, estimated: source.hasEstimatedCost))
                     .font(.callout.monospacedDigit())
                 Text(source.totals.tokens.total.compactString)
                     .font(.caption2)
@@ -56,7 +56,7 @@ struct ModelMetricRow: View {
                 .lineLimit(1)
             }
             Spacer()
-            Text(model.costUSD.usdString)
+            Text(UIStrings.costLabel(model.costUSD.usdString, estimated: model.hasEstimatedCost))
                 .font(.callout.monospacedDigit())
         }
         .padding(.vertical, 6)

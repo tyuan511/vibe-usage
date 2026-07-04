@@ -10,6 +10,7 @@ public struct MenuBarUsageView: View {
     let configurableAgentSources: [AgentSourceDescriptor]
     let hiddenAgentSourceIDs: Set<AgentSourceID>
     @Binding var selectedDateRange: UsageDateRangePreset
+    @Binding var selectedModelFilter: Set<String>
     let onRefresh: () -> Void
     let onFilterChange: () -> Void
     let onAgentDisplayCommit: (_ hiddenSourceIDs: Set<AgentSourceID>) -> Void
@@ -24,6 +25,7 @@ public struct MenuBarUsageView: View {
         configurableAgentSources: [AgentSourceDescriptor],
         hiddenAgentSourceIDs: Set<AgentSourceID>,
         selectedDateRange: Binding<UsageDateRangePreset>,
+        selectedModelFilter: Binding<Set<String>>,
         onRefresh: @escaping () -> Void,
         onFilterChange: @escaping () -> Void,
         onAgentDisplayCommit: @escaping (Set<AgentSourceID>) -> Void,
@@ -35,6 +37,7 @@ public struct MenuBarUsageView: View {
         self.configurableAgentSources = configurableAgentSources
         self.hiddenAgentSourceIDs = hiddenAgentSourceIDs
         self._selectedDateRange = selectedDateRange
+        self._selectedModelFilter = selectedModelFilter
         self.onRefresh = onRefresh
         self.onFilterChange = onFilterChange
         self.onAgentDisplayCommit = onAgentDisplayCommit
@@ -71,22 +74,8 @@ public struct MenuBarUsageView: View {
             }
 
             VStack(alignment: .leading, spacing: 7) {
-                MenuSectionTitle(UIStrings.models)
-                if snapshot.models.isEmpty {
-                    MenuEmptyState(text: UIStrings.text(zh: "暂无模型活动", en: "No model activity"))
-                } else {
-                    let models = Array(snapshot.models.prefix(6))
-                    VStack(spacing: 0) {
-                        ForEach(Array(models.enumerated()), id: \.element.id) { index, model in
-                            ModelMetricRow(model: model)
-                            if index < models.count - 1 {
-                                Divider()
-                            }
-                        }
-                    }
-                    .padding(8)
-                    .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 12))
-                }
+                modelsHeader
+                modelsList
             }
 
             menuFooter
@@ -101,9 +90,15 @@ public struct MenuBarUsageView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text("VibeUsage")
                     .font(.headline)
-                Text(UIStrings.updated(snapshot.generatedAt))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                if isRefreshing {
+                    Text(UIStrings.scanning)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text(UIStrings.updated(snapshot.generatedAt))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
 
             Spacer(minLength: 8)
@@ -149,6 +144,50 @@ public struct MenuBarUsageView: View {
         .controlSize(.small)
         .labelsHidden()
         .frame(width: 96)
+    }
+
+    private var modelsHeader: some View {
+        HStack(alignment: .center, spacing: 8) {
+            MenuSectionTitle(UIStrings.models)
+            Spacer()
+            if !snapshot.availableModels.isEmpty {
+                modelFilterMenu
+            }
+        }
+    }
+
+    private var modelFilterMenu: some View {
+        Picker(UIStrings.allModels, selection: modelFilterSelection) {
+            Text(UIStrings.allModels).tag("")
+            ForEach(snapshot.availableModels) { model in
+                Text(model.modelFamily).tag(model.modelFamily)
+            }
+        }
+        .pickerStyle(.menu)
+        .controlSize(.small)
+        .labelsHidden()
+        .frame(maxWidth: 140)
+    }
+
+    @ViewBuilder
+    private var modelsList: some View {
+        if snapshot.models.isEmpty {
+            MenuEmptyState(text: UIStrings.text(zh: "暂无模型活动", en: "No model activity"))
+        } else {
+            ScrollView {
+                VStack(spacing: 0) {
+                    ForEach(Array(snapshot.models.enumerated()), id: \.element.id) { index, model in
+                        ModelMetricRow(model: model)
+                        if index < snapshot.models.count - 1 {
+                            Divider()
+                        }
+                    }
+                }
+            }
+            .frame(maxHeight: 180)
+            .padding(8)
+            .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 12))
+        }
     }
 
     private var agentsHeader: some View {
@@ -210,10 +249,15 @@ public struct MenuBarUsageView: View {
         VStack(alignment: .leading, spacing: 6) {
             if let lastError {
                 Divider()
-                Label(lastError, systemImage: "exclamationmark.triangle")
-                    .font(.caption)
-                    .foregroundStyle(.red)
-                    .lineLimit(3)
+                HStack(alignment: .top, spacing: 8) {
+                    Label(lastError, systemImage: "exclamationmark.triangle")
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                        .lineLimit(3)
+                    Spacer(minLength: 0)
+                    Button(UIStrings.refresh, action: onRefresh)
+                        .controlSize(.small)
+                }
             }
         }
     }
@@ -223,6 +267,22 @@ public struct MenuBarUsageView: View {
             get: { selectedDateRange },
             set: { value in
                 selectedDateRange = value
+                onFilterChange()
+            }
+        )
+    }
+
+    private var modelFilterSelection: Binding<String> {
+        Binding(
+            get: {
+                selectedModelFilter.count == 1 ? selectedModelFilter.first ?? "" : ""
+            },
+            set: { value in
+                if value.isEmpty {
+                    selectedModelFilter = []
+                } else {
+                    selectedModelFilter = [value]
+                }
                 onFilterChange()
             }
         )

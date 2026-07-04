@@ -13,22 +13,24 @@ struct VibeUsageApp: App {
 
     var body: some Scene {
         MenuBarExtra {
-            MenuBarUsageView(
-                snapshot: viewModel.snapshot,
-                isRefreshing: viewModel.isRefreshing,
-                lastError: viewModel.lastError,
-                configurableAgentSources: viewModel.configurableAgentSources,
-                hiddenAgentSourceIDs: viewModel.hiddenAgentSourceIDs,
-                selectedDateRange: $viewModel.selectedDateRange,
-                onRefresh: { viewModel.refresh() },
-                onFilterChange: { viewModel.applyFilters() },
-                onAgentDisplayCommit: { hidden in
-                    viewModel.setHiddenAgentSourceIDs(hidden)
-                },
-                onQuit: { NSApp.terminate(nil) }
-            )
-            .onAppear {
-                viewModel.refresh()
+            if let startupError = viewModel.startupError {
+                StartupFailureView(message: startupError, onQuit: { NSApp.terminate(nil) })
+            } else {
+                MenuBarUsageView(
+                    snapshot: viewModel.snapshot,
+                    isRefreshing: viewModel.isRefreshing,
+                    lastError: viewModel.lastError,
+                    configurableAgentSources: viewModel.configurableAgentSources,
+                    hiddenAgentSourceIDs: viewModel.hiddenAgentSourceIDs,
+                    selectedDateRange: $viewModel.selectedDateRange,
+                    selectedModelFilter: $viewModel.selectedModelFilter,
+                    onRefresh: { viewModel.refresh() },
+                    onFilterChange: { viewModel.applyFilters() },
+                    onAgentDisplayCommit: { hidden in
+                        viewModel.setHiddenAgentSourceIDs(hidden)
+                    },
+                    onQuit: { NSApp.terminate(nil) }
+                )
             }
         } label: {
             Image(systemName: "chart.bar.xaxis")
@@ -42,12 +44,14 @@ final class AppViewModel: ObservableObject {
     @Published var snapshot: UsageDashboardSnapshot
     @Published var isRefreshing = false
     @Published var lastError: String?
+    @Published var startupError: String?
     @Published var selectedDateRange: UsageDateRangePreset = .today
+    @Published var selectedModelFilter: Set<String> = []
     @Published var configurableAgentSources: [AgentSourceDescriptor] = []
     @Published var hiddenAgentSourceIDs: Set<AgentSourceID>
 
-    private let ingestor: UsageIngestor
-    private let aggregation: UsageAggregationService
+    private let ingestor: UsageIngestor?
+    private let aggregation: UsageAggregationService?
     private let allSourceDescriptors: [AgentSourceDescriptor]
     private var locallyDiscoveredSourceIDs = Set<AgentSourceID>()
     private var autoRefreshCoordinator: UsageAutoRefreshCoordinator?
@@ -61,26 +65,26 @@ final class AppViewModel: ObservableObject {
             registry.register(adapter)
         }
 
-        let database: UsageDatabase
-        let store: GRDBUsageEventStore
-        do {
-            database = try UsageDatabase(path: UsageDatabase.defaultStorePath())
-            store = GRDBUsageEventStore(database: database)
-        } catch {
-            fatalError("Failed to open VibeUsage database: \(error)")
-        }
-
-        let pricing = BundledPricingProvider()
-        self.ingestor = UsageIngestor(registry: registry, store: store, pricing: pricing)
-        self.aggregation = UsageAggregationService(store: store, registry: registry)
         self.allSourceDescriptors = registry.descriptors
         self.hiddenAgentSourceIDs = Self.loadHiddenAgentSourceIDs()
         self.snapshot = .empty()
 
-        autoRefreshCoordinator = UsageAutoRefreshCoordinator(registry: registry) { [weak self] in
-            await self?.performRefresh()
+        do {
+            let database = try UsageDatabase(path: UsageDatabase.defaultStorePath())
+            let store = GRDBUsageEventStore(database: database)
+            let pricing = BundledPricingProvider()
+            self.ingestor = UsageIngestor(registry: registry, store: store, pricing: pricing)
+            self.aggregation = UsageAggregationService(store: store, registry: registry)
+
+            autoRefreshCoordinator = UsageAutoRefreshCoordinator(registry: registry) { [weak self] in
+                await self?.performRefresh()
+            }
+            autoRefreshCoordinator?.start()
+        } catch {
+            self.ingestor = nil
+            self.aggregation = nil
+            self.startupError = error.localizedDescription
         }
-        autoRefreshCoordinator?.start()
 
         Task {
             await GitHubReleaseUpdater.checkForUpdates()
@@ -98,6 +102,7 @@ final class AppViewModel: ObservableObject {
     }
 
     func refresh() {
+        guard ingestor != nil else { return }
         guard !isRefreshing else {
             pendingRefresh = true
             return
@@ -106,6 +111,7 @@ final class AppViewModel: ObservableObject {
     }
 
     private func performRefresh() {
+        guard let ingestor, let aggregation else { return }
         isRefreshing = true
         lastError = nil
 
@@ -122,6 +128,7 @@ final class AppViewModel: ObservableObject {
                 )
                 let next = try aggregation.dashboardSnapshot(
                     visibleSourceFilter: visibleSourceIDs,
+                    modelFilter: selectedModelFilter,
                     dateRange: selectedDateRange
                 )
                 await MainActor.run {
@@ -148,12 +155,14 @@ final class AppViewModel: ObservableObject {
     }
 
     func applyFilters() {
+        guard let aggregation else { return }
         do {
             snapshot = try aggregation.dashboardSnapshot(
                 visibleSourceFilter: Self.visibleSourceIDs(
                     discovered: locallyDiscoveredSourceIDs,
                     hidden: hiddenAgentSourceIDs
                 ),
+                modelFilter: selectedModelFilter,
                 dateRange: selectedDateRange
             )
             lastError = nil
@@ -186,7 +195,6 @@ final class AppViewModel: ObservableObject {
     private static func saveHiddenAgentSourceIDs(_ ids: Set<AgentSourceID>) {
         UserDefaults.standard.set(ids.map(\.rawValue).sorted(), forKey: hiddenAgentSourceIDsKey)
     }
-
 }
 
 VibeUsageApp.main()
