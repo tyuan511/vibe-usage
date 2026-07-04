@@ -156,17 +156,31 @@ public struct MenuBarUsageView: View {
         }
     }
 
+    private static let allModelsTag = "__all__"
+
     private var modelFilterMenu: some View {
         Picker(UIStrings.allModels, selection: modelFilterSelection) {
-            Text(UIStrings.allModels).tag("")
+            Text(UIStrings.allModels).tag(Self.allModelsTag)
             ForEach(snapshot.availableModels) { model in
-                Text(model.modelFamily).tag(model.modelFamily)
+                Text(modelPickerLabel(model)).tag(model.id)
             }
         }
         .pickerStyle(.menu)
         .controlSize(.small)
         .labelsHidden()
         .frame(maxWidth: 140)
+    }
+
+    private func modelPickerLabel(_ model: ModelUsageSummary) -> String {
+        let sameFamilyCount = snapshot.availableModels.filter { $0.modelFamily == model.modelFamily }.count
+        if sameFamilyCount > 1 {
+            return "\(model.modelFamily) · \(model.sourceID.rawValue)"
+        }
+        return model.modelFamily
+    }
+
+    private var modelsListHeight: CGFloat {
+        min(180, max(52, CGFloat(snapshot.models.count) * 34 + 16))
     }
 
     @ViewBuilder
@@ -184,7 +198,7 @@ public struct MenuBarUsageView: View {
                     }
                 }
             }
-            .frame(maxHeight: 180)
+            .frame(height: modelsListHeight)
             .padding(8)
             .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 12))
         }
@@ -275,13 +289,18 @@ public struct MenuBarUsageView: View {
     private var modelFilterSelection: Binding<String> {
         Binding(
             get: {
-                selectedModelFilter.count == 1 ? selectedModelFilter.first ?? "" : ""
+                guard selectedModelFilter.count == 1, let family = selectedModelFilter.first else {
+                    return Self.allModelsTag
+                }
+                return snapshot.availableModels.first(where: { $0.modelFamily == family })?.id ?? Self.allModelsTag
             },
             set: { value in
-                if value.isEmpty {
+                if value == Self.allModelsTag {
                     selectedModelFilter = []
+                } else if let model = snapshot.availableModels.first(where: { $0.id == value }) {
+                    selectedModelFilter = [model.modelFamily]
                 } else {
-                    selectedModelFilter = [value]
+                    selectedModelFilter = []
                 }
                 onFilterChange()
             }
