@@ -175,6 +175,44 @@ public final class GRDBUsageEventStore: UsageEventStore, Sendable {
         }
     }
 
+    /// Per-project totals across `[startDay, endDay]`, one row per (project,
+    /// source) pair, ordered by cost descending. `NULL`/absent
+    /// `project_or_workspace` is grouped under the empty string. Empty
+    /// `sourceFilter` means "all sources".
+    public func projectBreakdown(
+        sourceFilter: Set<AgentSourceID>,
+        startDay: String,
+        endDay: String,
+        modelFamilyFilter: Set<String> = []
+    ) throws -> [ProjectBreakdownRow] {
+        try dbQueue.read { db in
+            let sql = Self.projectBreakdownSQL(sourceFilter: sourceFilter, modelFamilyFilter: modelFamilyFilter)
+            let arguments = Self.rangeArguments(
+                startDay: startDay,
+                endDay: endDay,
+                sourceFilter: sourceFilter,
+                modelFamilyFilter: modelFamilyFilter
+            )
+            let rows = try Row.fetchAll(db, sql: sql, arguments: arguments)
+            return rows.map { row in
+                ProjectBreakdownRow(
+                    project: row["project"],
+                    sourceID: AgentSourceID(rawValue: row["source_id"]),
+                    tokens: TokenCounts(
+                        input: row["input"],
+                        output: row["output"],
+                        cacheCreate: row["cacheCreate"],
+                        cacheRead: row["cacheRead"],
+                        reasoning: row["reasoning"]
+                    ),
+                    costUSD: Decimal(row["cost"] as Double),
+                    eventCount: row["eventCount"],
+                    sessionCount: row["sessionCount"]
+                )
+            }
+        }
+    }
+
     private static func sourceFilterClause(_ sourceFilter: Set<AgentSourceID>) -> String {
         guard !sourceFilter.isEmpty else { return "" }
         let placeholders = sourceFilter.map { _ in "?" }.joined(separator: ", ")
@@ -238,6 +276,28 @@ public final class GRDBUsageEventStore: UsageEventStore, Sendable {
         ORDER BY cost DESC
         """
     }
+
+    private static func projectBreakdownSQL(sourceFilter: Set<AgentSourceID>, modelFamilyFilter: Set<String>) -> String {
+        """
+        SELECT COALESCE(project_or_workspace, '') AS project,
+               source_id,
+               SUM(input_tokens) AS input,
+               SUM(output_tokens) AS output,
+               SUM(cache_create_tokens) AS cacheCreate,
+               SUM(cache_read_tokens) AS cacheRead,
+               SUM(reasoning_tokens) AS reasoning,
+               SUM(cost_usd) AS cost,
+               COUNT(*) AS eventCount,
+               COUNT(DISTINCT session_id) AS sessionCount
+        FROM usage_event
+        WHERE substr(timestamp_utc, 1, 10) BETWEEN ? AND ?
+        \(sourceFilterClause(sourceFilter))
+        \(modelFilterClause(modelFamilyFilter))
+        GROUP BY project, source_id
+        ORDER BY cost DESC
+        """
+    }
+
 }
 
 public struct DailySourceUsage: Sendable, Equatable {
@@ -255,3 +315,13 @@ public struct ModelBreakdownRow: Sendable, Equatable {
     public let eventCount: Int
     public let estimatedEventCount: Int
 }
+
+public struct ProjectBreakdownRow: Sendable, Equatable {
+    public let project: String
+    public let sourceID: AgentSourceID
+    public let tokens: TokenCounts
+    public let costUSD: Decimal
+    public let eventCount: Int
+    public let sessionCount: Int
+}
+
