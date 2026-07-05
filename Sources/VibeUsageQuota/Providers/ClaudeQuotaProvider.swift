@@ -62,6 +62,9 @@ public struct ClaudeQuotaProvider: Sendable {
             if response.statusCode == 401 {
                 return snapshot(.unauthorized, at: fetchedAt)
             }
+            if response.statusCode == 429 {
+                return snapshot(.networkError("HTTP 429"), at: fetchedAt)
+            }
             guard (200..<300).contains(response.statusCode) else {
                 return snapshot(.networkError("HTTP \(response.statusCode)"), at: fetchedAt)
             }

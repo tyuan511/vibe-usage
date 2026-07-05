@@ -27,6 +27,8 @@ extension AgentSourceID {
 public struct QuotaService {
     private let claudeProvider: ClaudeQuotaProvider
     private let codexProvider: CodexQuotaProvider
+    private let claudeFetchCoordinator: QuotaFetchCoordinator
+    private let codexFetchCoordinator: QuotaFetchCoordinator
     private let connectionManager: QuotaConnectionManager
     private let isEnabled: @Sendable () -> Bool
 
@@ -38,6 +40,8 @@ public struct QuotaService {
     ) {
         self.claudeProvider = claudeProvider
         self.codexProvider = codexProvider
+        self.claudeFetchCoordinator = QuotaFetchCoordinator()
+        self.codexFetchCoordinator = QuotaFetchCoordinator()
         self.connectionManager = connectionManager
         self.isEnabled = isEnabled
     }
@@ -61,13 +65,17 @@ public struct QuotaService {
 
     private func fetchClaude() async -> QuotaSourceSnapshot {
         guard connectionManager.isConnected(.claudeQuota) else {
+            await claudeFetchCoordinator.reset()
             return QuotaSourceSnapshot(sourceID: .claudeQuota, displayName: claudeProvider.displayName, state: .notConnected, fetchedAt: Date())
         }
         guard let token = await connectionManager.validAccessToken(for: .claudeQuota) else {
             return QuotaSourceSnapshot(sourceID: .claudeQuota, displayName: claudeProvider.displayName, state: .unauthorized, fetchedAt: Date())
         }
-        let snapshot = await claudeProvider.fetch(accessToken: token)
+        let snapshot = await claudeFetchCoordinator.fetch {
+            await claudeProvider.fetch(accessToken: token)
+        }
         if case .unauthorized = snapshot.state {
+            await claudeFetchCoordinator.reset()
             connectionManager.markUnauthorized(.claudeQuota)
         }
         return withTier(snapshot, provider: .claudeQuota)
@@ -75,14 +83,18 @@ public struct QuotaService {
 
     private func fetchCodex() async -> QuotaSourceSnapshot {
         guard connectionManager.isConnected(.codexQuota) else {
+            await codexFetchCoordinator.reset()
             return QuotaSourceSnapshot(sourceID: .codexQuota, displayName: codexProvider.displayName, state: .notConnected, fetchedAt: Date())
         }
         guard let token = await connectionManager.validAccessToken(for: .codexQuota) else {
             return QuotaSourceSnapshot(sourceID: .codexQuota, displayName: codexProvider.displayName, state: .unauthorized, fetchedAt: Date())
         }
         let accountID = connectionManager.accountID(for: .codexQuota)
-        let snapshot = await codexProvider.fetch(accessToken: token, accountID: accountID)
+        let snapshot = await codexFetchCoordinator.fetch {
+            await codexProvider.fetch(accessToken: token, accountID: accountID)
+        }
         if case .unauthorized = snapshot.state {
+            await codexFetchCoordinator.reset()
             connectionManager.markUnauthorized(.codexQuota)
         }
         return withTier(snapshot, provider: .codexQuota)

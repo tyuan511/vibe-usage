@@ -99,8 +99,8 @@ struct QuotaSourceRow: View {
                 EmptyView()
             case .unauthorized:
                 statusLine(QuotaUIStrings.unauthorized, tint: .orange)
-            case .networkError:
-                statusLine(QuotaUIStrings.networkError)
+            case .networkError(let message):
+                statusLine(QuotaUIStrings.networkError(message))
             case .disabled:
                 statusLine(QuotaUIStrings.disabled)
             }
@@ -220,7 +220,13 @@ enum QuotaUIStrings {
     static let sectionTitle = UIStrings.text(zh: "限额", en: "Limits")
     static let noWindowData = UIStrings.text(zh: "暂无额度数据", en: "No quota data")
     static let unauthorized = UIStrings.text(zh: "登录已过期，请重新连接", en: "Session expired, reconnect")
-    static let networkError = UIStrings.text(zh: "网络错误", en: "Network error")
+    static func networkError(_ message: String) -> String {
+        let trimmed = message.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            return UIStrings.text(zh: "网络错误", en: "Network error")
+        }
+        return UIStrings.text(zh: "网络错误：\(trimmed)", en: "Network error: \(trimmed)")
+    }
     static let disabled = UIStrings.text(zh: "已关闭", en: "Disabled")
     static let disconnect = UIStrings.text(zh: "断开连接", en: "Disconnect")
     static let waitingForBrowser = UIStrings.text(zh: "等待浏览器授权…", en: "Waiting for browser authorization…")

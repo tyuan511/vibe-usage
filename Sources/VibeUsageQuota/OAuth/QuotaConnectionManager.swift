@@ -41,6 +41,12 @@ public final class QuotaConnectionManager {
     /// retrying the refresh every call.
     private var flaggedUnauthorized: Set<AgentSourceID> = []
 
+    /// In-memory mirror of ``ConnectedAccountStoring`` so quota polling
+    /// (menu-bar open, timer, manual refresh) doesn't hit the keychain on
+    /// every `isConnected` / `validAccessToken` / `subscriptionTier` call.
+    private var accountCache: [AgentSourceID: ConnectedAccount] = [:]
+    private var accountCachePrimed: Set<AgentSourceID> = []
+
     public init(
         store: any ConnectedAccountStoring = KeychainConnectedAccountStore(),
         tokenClient: OAuthTokenClient = OAuthTokenClient(),
@@ -57,16 +63,17 @@ public final class QuotaConnectionManager {
         self.loopbackServerFactory = loopbackServerFactory
         self.browserOpener = browserOpener
         self.now = now
+        primeAccountCache()
     }
 
     public func isConnected(_ provider: AgentSourceID) -> Bool {
-        store.load(provider) != nil
+        cachedAccount(for: provider) != nil
     }
 
     /// The stored `ChatGPT-Account-Id` (Codex only) for the given provider,
     /// if any was captured from the `id_token` during connect/refresh.
     public func accountID(for provider: AgentSourceID) -> String? {
-        store.load(provider)?.accountID
+        cachedAccount(for: provider)?.accountID
     }
 
     /// The account's subscription tier, whatever granularity the upstream
@@ -77,7 +84,7 @@ public final class QuotaConnectionManager {
     /// Max 5x vs 20x multiplier, or a Codex "pro 5x/20x" tier) — this
     /// surfaces exactly what's available rather than guessing the rest.
     public func subscriptionTier(for provider: AgentSourceID) -> String? {
-        store.load(provider)?.subscriptionType
+        cachedAccount(for: provider)?.subscriptionType
     }
 
     /// Connects a provider. Codex runs the automatic loopback OAuth flow
@@ -111,21 +118,21 @@ public final class QuotaConnectionManager {
                 throw QuotaConnectionError.claudeNotLoggedIn
             }
             flaggedUnauthorized.remove(provider)
-            store.save(
-                ConnectedAccount(
-                    accessToken: credential.accessToken,
-                    refreshToken: credential.refreshToken,
-                    expiresAt: credential.expiresAt ?? now(),
-                    accountID: nil,
-                    subscriptionType: credential.subscriptionType
-                ),
-                for: provider
+            let account = ConnectedAccount(
+                accessToken: credential.accessToken,
+                refreshToken: credential.refreshToken,
+                expiresAt: credential.expiresAt ?? now(),
+                accountID: nil,
+                subscriptionType: credential.subscriptionType
             )
+            store.save(account, for: provider)
+            setCachedAccount(account, for: provider)
         }
     }
 
     public func disconnect(_ provider: AgentSourceID) {
         store.clear(provider)
+        clearCachedAccount(for: provider)
         flaggedUnauthorized.remove(provider)
     }
 
@@ -140,7 +147,7 @@ public final class QuotaConnectionManager {
     /// (`markUnauthorized`), the UI prompts to reconnect, which re-imports a
     /// fresh token from Claude Code.
     public func validAccessToken(for provider: AgentSourceID) async -> String? {
-        guard let account = store.load(provider) else { return nil }
+        guard let account = cachedAccount(for: provider) else { return nil }
         guard !flaggedUnauthorized.contains(provider) else { return nil }
 
         let needsRefresh = account.expiresAt.timeIntervalSince(now()) < 60
@@ -162,6 +169,7 @@ public final class QuotaConnectionManager {
                 subscriptionType: refreshed.planType ?? account.subscriptionType
             )
             store.save(merged, for: provider)
+            setCachedAccount(merged, for: provider)
             return merged.accessToken
         } catch {
             markUnauthorized(provider)
@@ -176,20 +184,52 @@ public final class QuotaConnectionManager {
     public func markUnauthorized(_ provider: AgentSourceID) {
         flaggedUnauthorized.insert(provider)
         store.clear(provider)
+        clearCachedAccount(for: provider)
+    }
+
+    private func primeAccountCache() {
+        let all = store.loadAllAccounts()
+        for provider in [AgentSourceID.claudeQuota, .codexQuota] {
+            accountCachePrimed.insert(provider)
+            if let account = all[provider] {
+                accountCache[provider] = account
+            }
+        }
+    }
+
+    private func cachedAccount(for provider: AgentSourceID) -> ConnectedAccount? {
+        if accountCachePrimed.contains(provider) {
+            return accountCache[provider]
+        }
+        let loaded = store.load(provider)
+        accountCachePrimed.insert(provider)
+        if let loaded {
+            accountCache[provider] = loaded
+        }
+        return loaded
+    }
+
+    private func setCachedAccount(_ account: ConnectedAccount, for provider: AgentSourceID) {
+        accountCachePrimed.insert(provider)
+        accountCache[provider] = account
+    }
+
+    private func clearCachedAccount(for provider: AgentSourceID) {
+        accountCachePrimed.insert(provider)
+        accountCache.removeValue(forKey: provider)
     }
 
     private func persist(_ tokens: OAuthTokens, for provider: AgentSourceID) {
         flaggedUnauthorized.remove(provider)
-        store.save(
-            ConnectedAccount(
-                accessToken: tokens.accessToken,
-                refreshToken: tokens.refreshToken,
-                expiresAt: tokens.expiresAt,
-                accountID: tokens.accountID,
-                subscriptionType: tokens.planType
-            ),
-            for: provider
+        let account = ConnectedAccount(
+            accessToken: tokens.accessToken,
+            refreshToken: tokens.refreshToken,
+            expiresAt: tokens.expiresAt,
+            accountID: tokens.accountID,
+            subscriptionType: tokens.planType
         )
+        store.save(account, for: provider)
+        setCachedAccount(account, for: provider)
     }
 
     private func config(for provider: AgentSourceID) -> OAuthProviderConfig {

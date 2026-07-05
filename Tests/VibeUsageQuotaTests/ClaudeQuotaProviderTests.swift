@@ -82,6 +82,19 @@ import Testing
         #expect(snapshot.state == .unauthorized)
     }
 
+    @Test func fetchReturnsNetworkErrorOn429() async {
+        let provider = ClaudeQuotaProvider(
+            fetcher: FakeHTTPFetcher(result: .success((Data("{}".utf8), 429))),
+            now: { self.referenceNow }
+        )
+        let snapshot = await provider.fetch(accessToken: "token")
+        guard case .networkError(let message) = snapshot.state else {
+            Issue.record("expected networkError, got \(snapshot.state)")
+            return
+        }
+        #expect(message == "HTTP 429")
+    }
+
     @Test func fetchReturnsNetworkErrorWhenFetcherThrows() async {
         let provider = ClaudeQuotaProvider(
             fetcher: FakeHTTPFetcher(result: .failure(URLError(.notConnectedToInternet))),

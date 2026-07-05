@@ -33,6 +33,9 @@ public protocol ClaudeCLICredentialReading: Sendable {
 /// Reads the `Claude Code-credentials` generic-password keychain item (payload
 /// shape `{ "claudeAiOauth": { accessToken, refreshToken, expiresAt, ... } }`),
 /// falling back to `~/.claude/.credentials.json` (same shape). Read-only.
+///
+/// The credentials file is tried first so connecting Claude doesn't trigger a
+/// cross-app keychain prompt when Claude Code already wrote the token to disk.
 public struct KeychainClaudeCLICredentialReader: ClaudeCLICredentialReading {
     private static let keychainService = "Claude Code-credentials"
 
@@ -43,8 +46,8 @@ public struct KeychainClaudeCLICredentialReader: ClaudeCLICredentialReading {
     }
 
     public func read() -> ClaudeCLICredential? {
-        if let fromKeychain = readFromKeychain() { return fromKeychain }
-        return readFromFile()
+        if let fromFile = readFromFile() { return fromFile }
+        return readFromKeychain()
     }
 
     private func readFromKeychain() -> ClaudeCLICredential? {

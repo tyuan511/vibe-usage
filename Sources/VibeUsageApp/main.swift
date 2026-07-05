@@ -80,9 +80,6 @@ private struct MenuContentView: View {
                 onQuotaDisconnect: { viewModel.disconnectQuota($0) },
                 onQuotaCancelConnect: { viewModel.cancelQuotaConnect($0) }
             )
-            .onAppear {
-                viewModel.refreshQuota()
-            }
         }
     }
 }
@@ -112,6 +109,7 @@ final class AppViewModel: ObservableObject {
     @Published var enablesLimitMonitoring: Bool {
         didSet {
             UserDefaults.standard.set(enablesLimitMonitoring, forKey: Self.enablesLimitMonitoringKey)
+            guard !isInitializing else { return }
             refreshQuota()
         }
     }
@@ -126,6 +124,7 @@ final class AppViewModel: ObservableObject {
     private var pendingRefresh = false
     private var lastTodaySpend: Decimal?
     private var quotaRefreshTimer: Timer?
+    private var isInitializing = true
 
     init() {
         let registry = AdapterRegistry()
@@ -173,6 +172,7 @@ final class AppViewModel: ObservableObject {
 
         refreshQuota()
         startQuotaRefreshTimer()
+        isInitializing = false
     }
 
     deinit {

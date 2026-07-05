@@ -106,6 +106,10 @@ final class InMemoryConnectedAccountStore: ConnectedAccountStoring, @unchecked S
         storage[provider]
     }
 
+    func loadAllAccounts() -> [AgentSourceID: ConnectedAccount] {
+        storage
+    }
+
     func save(_ account: ConnectedAccount, for provider: AgentSourceID) {
         storage[provider] = account
     }

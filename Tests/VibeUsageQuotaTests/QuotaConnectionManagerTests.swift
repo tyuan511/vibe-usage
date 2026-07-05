@@ -45,6 +45,22 @@ import VibeUsageCore
         #expect(manager.isConnected(.claudeQuota))
     }
 
+    @Test func repeatedAccountLookupsHitStoreOnlyOncePerProvider() async {
+        let store = CountingConnectedAccountStore()
+        store.save(
+            ConnectedAccount(accessToken: "fresh-token", refreshToken: "refresh", expiresAt: Date().addingTimeInterval(3600)),
+            for: .claudeQuota
+        )
+        let manager = QuotaConnectionManager(store: store, claudeCredentialReader: FakeClaudeCredentialReader(credential: nil))
+
+        _ = manager.isConnected(.claudeQuota)
+        _ = manager.subscriptionTier(for: .claudeQuota)
+        _ = await manager.validAccessToken(for: .claudeQuota)
+
+        #expect(store.loadCount(for: .claudeQuota) == 0)
+        #expect(store.loadAllCount == 1)
+    }
+
     @Test func validAccessTokenRefreshesWhenNearExpiry() async {
         let store = InMemoryConnectedAccountStore()
         store.save(
@@ -217,4 +233,32 @@ final class RecordingClaudeCredentialReader: ClaudeCLICredentialReading, @unchec
 struct FakeClaudeCredentialReader: ClaudeCLICredentialReading {
     let credential: ClaudeCLICredential?
     func read() -> ClaudeCLICredential? { credential }
+}
+
+final class CountingConnectedAccountStore: ConnectedAccountStoring, @unchecked Sendable {
+    private var accounts: [AgentSourceID: ConnectedAccount] = [:]
+    private var loadCounts: [AgentSourceID: Int] = [:]
+    private(set) var loadAllCount = 0
+
+    func load(_ provider: AgentSourceID) -> ConnectedAccount? {
+        loadCounts[provider, default: 0] += 1
+        return accounts[provider]
+    }
+
+    func loadAllAccounts() -> [AgentSourceID: ConnectedAccount] {
+        loadAllCount += 1
+        return accounts
+    }
+
+    func save(_ account: ConnectedAccount, for provider: AgentSourceID) {
+        accounts[provider] = account
+    }
+
+    func clear(_ provider: AgentSourceID) {
+        accounts.removeValue(forKey: provider)
+    }
+
+    func loadCount(for provider: AgentSourceID) -> Int {
+        loadCounts[provider, default: 0]
+    }
 }
