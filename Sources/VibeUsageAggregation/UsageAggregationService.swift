@@ -71,6 +71,9 @@ public struct ModelUsageSummary: Identifiable, Sendable, Equatable {
 public enum UsageDateRangePreset: String, CaseIterable, Identifiable, Sendable {
     case today
     case yesterday
+    case last7Days
+    case last30Days
+    case last90Days
     case thisWeek
     case thisMonth
 
@@ -80,6 +83,9 @@ public enum UsageDateRangePreset: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .today: VibeUsageStrings.text(zh: "今天", en: "Today")
         case .yesterday: VibeUsageStrings.text(zh: "昨天", en: "Yesterday")
+        case .last7Days: VibeUsageStrings.text(zh: "近 7 天", en: "Last 7 Days")
+        case .last30Days: VibeUsageStrings.text(zh: "近 30 天", en: "Last 30 Days")
+        case .last90Days: VibeUsageStrings.text(zh: "近 90 天", en: "Last 90 Days")
         case .thisWeek: VibeUsageStrings.text(zh: "本周", en: "This Week")
         case .thisMonth: VibeUsageStrings.text(zh: "本月", en: "This Month")
         }
@@ -564,6 +570,15 @@ public final class UsageAggregationService: Sendable {
         case .yesterday:
             let yesterday = calendar.date(byAdding: .day, value: -1, to: todayStart) ?? todayStart
             return (yesterday, yesterday)
+        case .last7Days:
+            let start = calendar.date(byAdding: .day, value: -6, to: todayStart) ?? todayStart
+            return (start, todayStart)
+        case .last30Days:
+            let start = calendar.date(byAdding: .day, value: -29, to: todayStart) ?? todayStart
+            return (start, todayStart)
+        case .last90Days:
+            let start = calendar.date(byAdding: .day, value: -89, to: todayStart) ?? todayStart
+            return (start, todayStart)
         case .thisWeek:
             let weekday = calendar.component(.weekday, from: todayStart)
             let offset = (weekday - calendar.firstWeekday + 7) % 7

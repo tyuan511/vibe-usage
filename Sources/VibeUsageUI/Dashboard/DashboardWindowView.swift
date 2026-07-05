@@ -3,6 +3,7 @@ import Charts
 import SwiftUI
 import VibeUsageAggregation
 import VibeUsageCore
+import VibeUsageQuota
 
 /// The "console" window: a larger, resizable view of usage trends, project
 /// rollups, and recent sessions. Opened separately from the menu bar popover
@@ -11,9 +12,14 @@ import VibeUsageCore
 public struct DashboardWindowView: View {
     let snapshot: UsageInsightsSnapshot
     let isLoading: Bool
+    let quota: QuotaSnapshot
+    let quotaConnectUIStates: [AgentSourceID: QuotaConnectUIState]
     @Binding var selectedRange: UsageInsightsRange
     let onRangeChange: () -> Void
     let onRefresh: () -> Void
+    let onQuotaConnect: (AgentSourceID) -> Void
+    let onQuotaDisconnect: (AgentSourceID) -> Void
+    let onQuotaCancelConnect: (AgentSourceID) -> Void
 
     @State private var chartMetric: DashboardChartMetric = .spend
     @State private var selectedDay: String?
@@ -29,15 +35,25 @@ public struct DashboardWindowView: View {
     public init(
         snapshot: UsageInsightsSnapshot,
         isLoading: Bool,
+        quota: QuotaSnapshot = .empty,
+        quotaConnectUIStates: [AgentSourceID: QuotaConnectUIState] = [:],
         selectedRange: Binding<UsageInsightsRange>,
         onRangeChange: @escaping () -> Void,
-        onRefresh: @escaping () -> Void
+        onRefresh: @escaping () -> Void,
+        onQuotaConnect: @escaping (AgentSourceID) -> Void = { _ in },
+        onQuotaDisconnect: @escaping (AgentSourceID) -> Void = { _ in },
+        onQuotaCancelConnect: @escaping (AgentSourceID) -> Void = { _ in }
     ) {
         self.snapshot = snapshot
         self.isLoading = isLoading
+        self.quota = quota
+        self.quotaConnectUIStates = quotaConnectUIStates
         self._selectedRange = selectedRange
         self.onRangeChange = onRangeChange
         self.onRefresh = onRefresh
+        self.onQuotaConnect = onQuotaConnect
+        self.onQuotaDisconnect = onQuotaDisconnect
+        self.onQuotaCancelConnect = onQuotaCancelConnect
     }
 
     private var descriptorsByID: [AgentSourceID: AgentSourceDescriptor] {
@@ -60,6 +76,7 @@ public struct DashboardWindowView: View {
             VStack(alignment: .leading, spacing: DashboardTheme.sectionSpacing) {
                 header
                 heroRow
+                quotaSection
                 agentTilesSection
                 trendSection
                 projectsSection
@@ -251,6 +268,32 @@ public struct DashboardWindowView: View {
         case .last30Days: 30
         case .last90Days: 90
         case .thisMonth: Calendar.current.range(of: .day, in: .month, for: Date())?.count ?? 30
+        }
+    }
+
+    // MARK: - Quota
+
+    @ViewBuilder
+    private var quotaSection: some View {
+        if !quota.sources.isEmpty {
+            VStack(alignment: .leading, spacing: 10) {
+                MenuSectionTitle(QuotaUIStrings.sectionTitle)
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 260), spacing: 10)], spacing: 10) {
+                    ForEach(quota.sources) { source in
+                        QuotaSourceRow(
+                            snapshot: source,
+                            descriptor: descriptorsByID[source.sourceID],
+                            connectUIState: quotaConnectUIStates[source.sourceID],
+                            onConnect: onQuotaConnect,
+                            onDisconnect: onQuotaDisconnect,
+                            onCancelConnect: onQuotaCancelConnect
+                        )
+                        .padding(12)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 14))
+                    }
+                }
+            }
         }
     }
 

@@ -2,6 +2,7 @@ import AppKit
 import SwiftUI
 import VibeUsageAggregation
 import VibeUsageCore
+import VibeUsageQuota
 
 public struct MenuBarUsageView: View {
     let snapshot: UsageDashboardSnapshot
@@ -9,14 +10,20 @@ public struct MenuBarUsageView: View {
     let lastError: String?
     let configurableAgentSources: [AgentSourceDescriptor]
     let hiddenAgentSourceIDs: Set<AgentSourceID>
+    let quota: QuotaSnapshot
+    let quotaConnectUIStates: [AgentSourceID: QuotaConnectUIState]
     @Binding var selectedDateRange: UsageDateRangePreset
     @Binding var selectedModelFilter: Set<String>
     @Binding var showsSpendInMenuBar: Bool
+    @Binding var enablesLimitMonitoring: Bool
     let onRefresh: () -> Void
     let onFilterChange: () -> Void
     let onAgentDisplayCommit: (_ hiddenSourceIDs: Set<AgentSourceID>) -> Void
     let onOpenDashboard: () -> Void
     let onQuit: () -> Void
+    let onQuotaConnect: (AgentSourceID) -> Void
+    let onQuotaDisconnect: (AgentSourceID) -> Void
+    let onQuotaCancelConnect: (AgentSourceID) -> Void
     @State private var showsAgentSettings = false
     @State private var draftHiddenAgentSourceIDs = Set<AgentSourceID>()
 
@@ -26,28 +33,40 @@ public struct MenuBarUsageView: View {
         lastError: String?,
         configurableAgentSources: [AgentSourceDescriptor],
         hiddenAgentSourceIDs: Set<AgentSourceID>,
+        quota: QuotaSnapshot,
+        quotaConnectUIStates: [AgentSourceID: QuotaConnectUIState] = [:],
         selectedDateRange: Binding<UsageDateRangePreset>,
         selectedModelFilter: Binding<Set<String>>,
         showsSpendInMenuBar: Binding<Bool>,
+        enablesLimitMonitoring: Binding<Bool>,
         onRefresh: @escaping () -> Void,
         onFilterChange: @escaping () -> Void,
         onAgentDisplayCommit: @escaping (Set<AgentSourceID>) -> Void,
         onOpenDashboard: @escaping () -> Void,
-        onQuit: @escaping () -> Void
+        onQuit: @escaping () -> Void,
+        onQuotaConnect: @escaping (AgentSourceID) -> Void = { _ in },
+        onQuotaDisconnect: @escaping (AgentSourceID) -> Void = { _ in },
+        onQuotaCancelConnect: @escaping (AgentSourceID) -> Void = { _ in }
     ) {
         self.snapshot = snapshot
         self.isRefreshing = isRefreshing
         self.lastError = lastError
         self.configurableAgentSources = configurableAgentSources
         self.hiddenAgentSourceIDs = hiddenAgentSourceIDs
+        self.quota = quota
+        self.quotaConnectUIStates = quotaConnectUIStates
         self._selectedDateRange = selectedDateRange
         self._selectedModelFilter = selectedModelFilter
         self._showsSpendInMenuBar = showsSpendInMenuBar
+        self._enablesLimitMonitoring = enablesLimitMonitoring
         self.onRefresh = onRefresh
         self.onFilterChange = onFilterChange
         self.onAgentDisplayCommit = onAgentDisplayCommit
         self.onOpenDashboard = onOpenDashboard
         self.onQuit = onQuit
+        self.onQuotaConnect = onQuotaConnect
+        self.onQuotaDisconnect = onQuotaDisconnect
+        self.onQuotaCancelConnect = onQuotaCancelConnect
     }
 
     public var body: some View {
@@ -68,6 +87,8 @@ public struct MenuBarUsageView: View {
                     )
                 }
             }
+
+            quotaSection
 
             ActivityHeatmap(
                 daily: snapshot.activity,
@@ -151,6 +172,38 @@ public struct MenuBarUsageView: View {
         }
     }
 
+    private var descriptorsByID: [AgentSourceID: AgentSourceDescriptor] {
+        Dictionary(uniqueKeysWithValues: snapshot.discoveredSources.map { ($0.id, $0) })
+    }
+
+    @ViewBuilder
+    private var quotaSection: some View {
+        if !quota.sources.isEmpty {
+            VStack(alignment: .leading, spacing: 7) {
+                MenuSectionTitle(QuotaUIStrings.sectionTitle)
+                VStack(alignment: .leading, spacing: 10) {
+                    ForEach(Array(quota.sources.enumerated()), id: \.element.id) { index, source in
+                        QuotaSourceRow(
+                            snapshot: source,
+                            descriptor: descriptorsByID[source.sourceID],
+                            connectUIState: quotaConnectUIStates[source.sourceID],
+                            onConnect: onQuotaConnect,
+                            onDisconnect: onQuotaDisconnect,
+                            onCancelConnect: onQuotaCancelConnect
+                        )
+                        if index < quota.sources.count - 1 {
+                            Divider()
+                        }
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(10)
+                .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 12))
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
     private var dateRangeMenu: some View {
         Picker(UIStrings.text(zh: "时间", en: "Time"), selection: dateRangeSelection) {
             ForEach(UsageDateRangePreset.allCases) { range in
@@ -160,7 +213,7 @@ public struct MenuBarUsageView: View {
         .pickerStyle(.menu)
         .controlSize(.small)
         .labelsHidden()
-        .frame(width: 96)
+        .frame(width: 112)
     }
 
     private var modelsHeader: some View {
@@ -196,28 +249,44 @@ public struct MenuBarUsageView: View {
         return model.modelFamily
     }
 
-    private var modelsListHeight: CGFloat {
-        min(180, max(52, CGFloat(snapshot.models.count) * 34 + 16))
+    private static let modelsMaxScrollHeight: CGFloat = 180
+    private static let modelsRowHeight: CGFloat = 40
+
+    private var modelsListContentHeight: CGFloat {
+        let count = snapshot.models.count
+        let dividers = CGFloat(max(0, count - 1))
+        return CGFloat(count) * Self.modelsRowHeight + dividers + 16
+    }
+
+    private var modelsListNeedsScroll: Bool {
+        modelsListContentHeight > Self.modelsMaxScrollHeight
     }
 
     @ViewBuilder
     private var modelsList: some View {
         if snapshot.models.isEmpty {
             MenuEmptyState(text: UIStrings.text(zh: "暂无模型活动", en: "No model activity"))
-        } else {
-            MenuScrollList(height: modelsListHeight) {
-                VStack(spacing: 0) {
-                    ForEach(Array(snapshot.models.enumerated()), id: \.element.id) { index, model in
-                        ModelMetricRow(model: model)
-                        if index < snapshot.models.count - 1 {
-                            Divider()
-                        }
-                    }
-                }
-                .padding(8)
+        } else if modelsListNeedsScroll {
+            MenuScrollList(height: Self.modelsMaxScrollHeight) {
+                modelsListContent
             }
             .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 12))
+        } else {
+            modelsListContent
+                .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 12))
         }
+    }
+
+    private var modelsListContent: some View {
+        VStack(spacing: 0) {
+            ForEach(Array(snapshot.models.enumerated()), id: \.element.id) { index, model in
+                ModelMetricRow(model: model)
+                if index < snapshot.models.count - 1 {
+                    Divider()
+                }
+            }
+        }
+        .padding(8)
     }
 
     private var agentsHeader: some View {
@@ -246,6 +315,7 @@ public struct MenuBarUsageView: View {
         if showsAgentSettings {
             VStack(alignment: .leading, spacing: 7) {
                 showsSpendInMenuBarRow
+                enablesLimitMonitoringRow
 
                 if configurableAgentSources.isEmpty {
                     MenuEmptyState(text: UIStrings.text(zh: "没有本地 Agent", en: "No local agents"))
@@ -334,6 +404,24 @@ public struct MenuBarUsageView: View {
                 .lineLimit(1)
             Spacer(minLength: 8)
             Toggle(isOn: $showsSpendInMenuBar) {
+                EmptyView()
+            }
+            .toggleStyle(.checkbox)
+            .controlSize(.small)
+            .labelsHidden()
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 12))
+    }
+
+    private var enablesLimitMonitoringRow: some View {
+        HStack(spacing: 8) {
+            Text(UIStrings.text(zh: "监控订阅额度（联网）", en: "Monitor subscription limits (network)"))
+                .font(.callout)
+                .lineLimit(1)
+            Spacer(minLength: 8)
+            Toggle(isOn: $enablesLimitMonitoring) {
                 EmptyView()
             }
             .toggleStyle(.checkbox)

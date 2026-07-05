@@ -155,15 +155,26 @@ import VibeUsageStorage
 
     let today = UsageAggregationService.dayBounds(dateRange: .today, daysBack: 30, now: now, calendar: calendar)
     let yesterday = UsageAggregationService.dayBounds(dateRange: .yesterday, daysBack: 30, now: now, calendar: calendar)
+    let last7Days = UsageAggregationService.dayBounds(dateRange: .last7Days, daysBack: 30, now: now, calendar: calendar)
+    let last30Days = UsageAggregationService.dayBounds(dateRange: .last30Days, daysBack: 30, now: now, calendar: calendar)
+    let last90Days = UsageAggregationService.dayBounds(dateRange: .last90Days, daysBack: 30, now: now, calendar: calendar)
     let thisWeek = UsageAggregationService.dayBounds(dateRange: .thisWeek, daysBack: 30, now: now, calendar: calendar)
     let thisMonth = UsageAggregationService.dayBounds(dateRange: .thisMonth, daysBack: 30, now: now, calendar: calendar)
 
     #expect(calendar.component(.day, from: today.start) == 15)
     #expect(calendar.component(.day, from: yesterday.start) == 14)
+    #expect(calendar.component(.day, from: last7Days.start) == 9)
+    #expect(calendar.component(.month, from: last30Days.start) == 4)
+    #expect(calendar.component(.day, from: last30Days.start) == 16)
+    #expect(calendar.component(.month, from: last90Days.start) == 2)
+    #expect(calendar.component(.day, from: last90Days.start) == 15)
     #expect(calendar.component(.day, from: thisWeek.start) == 11)
     #expect(calendar.component(.day, from: thisMonth.start) == 1)
     #expect(today.start == today.end)
     #expect(yesterday.start == yesterday.end)
+    #expect(last7Days.end == today.end)
+    #expect(last30Days.end == today.end)
+    #expect(last90Days.end == today.end)
 }
 
 @Test func insightsSnapshotComposesProjectsAndTotals() throws {

@@ -88,10 +88,21 @@ let package = Package(
             ]
         ),
 
+        // MARK: - Quota (real-time subscription limit monitoring; independent
+        // of the local-cost aggregation pipeline above — no GRDB, no Storage)
+        .target(
+            name: "VibeUsageQuota",
+            dependencies: ["VibeUsageCore"]
+        ),
+        .testTarget(
+            name: "VibeUsageQuotaTests",
+            dependencies: ["VibeUsageQuota"]
+        ),
+
         // MARK: - UI (SwiftUI views; only knows adapters through AdapterRegistry)
         .target(
             name: "VibeUsageUI",
-            dependencies: ["VibeUsageCore", "VibeUsageAggregation"],
+            dependencies: ["VibeUsageCore", "VibeUsageAggregation", "VibeUsageQuota"],
             resources: [
                 .copy("Resources/logo.png"),
                 .copy("Resources/AgentIcons")
@@ -108,6 +119,7 @@ let package = Package(
                 "VibeUsageWatching",
                 "VibeUsageAggregation",
                 "VibeUsageAdapter",
+                "VibeUsageQuota",
                 "VibeUsageUI"
             ]
         ),
@@ -118,6 +130,7 @@ let package = Package(
                 "VibeUsageCore",
                 "VibeUsageAggregation",
                 "VibeUsageAdapter",
+                "VibeUsageQuota",
                 "VibeUsageUI"
             ]
         )

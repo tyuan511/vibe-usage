@@ -3,6 +3,7 @@ import SwiftUI
 import VibeUsageAdapter
 import VibeUsageAggregation
 import VibeUsageCore
+import VibeUsageQuota
 import VibeUsageUI
 
 @main
@@ -33,6 +34,7 @@ struct VibeUsagePreviewRenderer {
     private static func renderMenuPreview(outputPath: String) throws {
         let snapshot = makeMenuSnapshot()
         let sources = snapshot.discoveredSources
+        let quota = makeQuotaSnapshot()
         let size = NSSize(width: 388, height: 880)
 
         let view = ZStack(alignment: .top) {
@@ -43,9 +45,11 @@ struct VibeUsagePreviewRenderer {
                 lastError: nil,
                 configurableAgentSources: sources,
                 hiddenAgentSourceIDs: [],
+                quota: quota,
                 selectedDateRange: .constant(.today),
                 selectedModelFilter: .constant([]),
                 showsSpendInMenuBar: .constant(true),
+                enablesLimitMonitoring: .constant(true),
                 onRefresh: {},
                 onFilterChange: {},
                 onAgentDisplayCommit: { _ in },
@@ -64,6 +68,7 @@ struct VibeUsagePreviewRenderer {
 
     private static func renderDashboard(outputPath: String, isDark: Bool) throws {
         let snapshot = makeDashboardSnapshot()
+        let quota = makeQuotaSnapshot()
         let size = NSSize(width: 1040, height: 1600)
 
         let view = ZStack(alignment: .top) {
@@ -71,6 +76,7 @@ struct VibeUsagePreviewRenderer {
             DashboardWindowView(
                 snapshot: snapshot,
                 isLoading: false,
+                quota: quota,
                 selectedRange: .constant(.last30Days),
                 onRangeChange: {},
                 onRefresh: {}
@@ -261,6 +267,50 @@ struct VibeUsagePreviewRenderer {
 private enum RenderError: Error {
     case bitmapAllocationFailed
     case pngEncodingFailed
+}
+
+// MARK: - Quota mock data
+
+/// Claude `.ok` with three windows spanning all three tint thresholds
+/// (green/amber/red) and Codex `.notConnected` to show a non-ok state renders
+/// cleanly alongside a populated one.
+private func makeQuotaSnapshot() -> QuotaSnapshot {
+    let now = fixedDate()
+
+    let claudeWindows: [QuotaWindow] = [
+        QuotaWindow(
+            id: "five_hour",
+            label: VibeUsageStrings.text(zh: "5 小时额度", en: "5-Hour Quota"),
+            usedFraction: 0.62,
+            usedPercentText: "62%",
+            resetsAt: now.addingTimeInterval(2 * 3600 + 18 * 60),
+            resetCountdownText: QuotaFormatting.countdownText(resetsAt: now.addingTimeInterval(2 * 3600 + 18 * 60), now: now)
+        ),
+        QuotaWindow(
+            id: "seven_day",
+            label: VibeUsageStrings.text(zh: "7 日额度", en: "7-Day Quota"),
+            usedFraction: 0.78,
+            usedPercentText: "78%",
+            resetsAt: now.addingTimeInterval(3 * 86400 + 4 * 3600),
+            resetCountdownText: QuotaFormatting.countdownText(resetsAt: now.addingTimeInterval(3 * 86400 + 4 * 3600), now: now)
+        ),
+        QuotaWindow(
+            id: "seven_day_opus",
+            label: VibeUsageStrings.text(zh: "7 日 Opus 额度", en: "7-Day Opus Quota"),
+            usedFraction: 0.91,
+            usedPercentText: "91%",
+            resetsAt: now.addingTimeInterval(3 * 86400 + 4 * 3600),
+            resetCountdownText: QuotaFormatting.countdownText(resetsAt: now.addingTimeInterval(3 * 86400 + 4 * 3600), now: now)
+        )
+    ]
+
+    return QuotaSnapshot(
+        sources: [
+            QuotaSourceSnapshot(sourceID: .claudeCode, displayName: "Claude", state: .ok(claudeWindows), fetchedAt: now, subscriptionTier: "max"),
+            QuotaSourceSnapshot(sourceID: .codexCLI, displayName: "Codex", state: .notConnected, fetchedAt: now)
+        ],
+        generatedAt: now
+    )
 }
 
 // MARK: - Menu bar mock data

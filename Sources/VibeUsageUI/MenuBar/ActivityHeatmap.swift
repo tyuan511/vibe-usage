@@ -69,30 +69,7 @@ struct ActivityHeatmap: View {
             .frame(maxWidth: .infinity, minHeight: heatmapHeight, maxHeight: heatmapHeight)
             .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 12))
 
-            HStack(spacing: 6) {
-                Text(UIStrings.lessActivity)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                ForEach(legendColors, id: \.self) { color in
-                    RoundedRectangle(cornerRadius: 2)
-                        .fill(color)
-                        .frame(width: 10, height: 10)
-                }
-                Text(UIStrings.moreActivity)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            }
         }
-    }
-
-    private var legendColors: [Color] {
-        [
-            Color.secondary.opacity(0.12),
-            Color(red: 0.38, green: 0.72, blue: 0.48).opacity(0.45),
-            Color(red: 0.29, green: 0.65, blue: 0.41).opacity(0.65),
-            Color(red: 0.20, green: 0.56, blue: 0.34).opacity(0.82),
-            Color(red: 0.10, green: 0.43, blue: 0.25)
-        ]
     }
 
     private var heatmapHeight: CGFloat {

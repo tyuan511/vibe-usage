@@ -4,6 +4,7 @@ import VibeUsageAdapter
 import VibeUsageAggregation
 import VibeUsageCore
 import VibeUsagePricing
+import VibeUsageQuota
 import VibeUsageStorage
 import VibeUsageUI
 import VibeUsageWatching
@@ -27,9 +28,14 @@ struct VibeUsageApp: App {
             DashboardWindowView(
                 snapshot: viewModel.insights,
                 isLoading: viewModel.isLoadingInsights,
+                quota: viewModel.quota,
+                quotaConnectUIStates: viewModel.quotaConnectUIStates,
                 selectedRange: $viewModel.insightsRange,
                 onRangeChange: { viewModel.reloadInsights() },
-                onRefresh: { viewModel.refresh() }
+                onRefresh: { viewModel.refresh() },
+                onQuotaConnect: { viewModel.connectQuota($0) },
+                onQuotaDisconnect: { viewModel.disconnectQuota($0) },
+                onQuotaCancelConnect: { viewModel.cancelQuotaConnect($0) }
             )
         }
     }
@@ -54,9 +60,12 @@ private struct MenuContentView: View {
                 lastError: viewModel.lastError,
                 configurableAgentSources: viewModel.configurableAgentSources,
                 hiddenAgentSourceIDs: viewModel.hiddenAgentSourceIDs,
+                quota: viewModel.quota,
+                quotaConnectUIStates: viewModel.quotaConnectUIStates,
                 selectedDateRange: $viewModel.selectedDateRange,
                 selectedModelFilter: $viewModel.selectedModelFilter,
                 showsSpendInMenuBar: $viewModel.showsSpendInMenuBar,
+                enablesLimitMonitoring: $viewModel.enablesLimitMonitoring,
                 onRefresh: { viewModel.refresh() },
                 onFilterChange: { viewModel.applyFilters() },
                 onAgentDisplayCommit: { hidden in
@@ -66,7 +75,10 @@ private struct MenuContentView: View {
                     openWindow(id: "dashboard")
                     NSApp.activate(ignoringOtherApps: true)
                 },
-                onQuit: { NSApp.terminate(nil) }
+                onQuit: { NSApp.terminate(nil) },
+                onQuotaConnect: { viewModel.connectQuota($0) },
+                onQuotaDisconnect: { viewModel.disconnectQuota($0) },
+                onQuotaCancelConnect: { viewModel.cancelQuotaConnect($0) }
             )
         }
     }
@@ -92,14 +104,27 @@ final class AppViewModel: ObservableObject {
             updateTodaySpendMenuText()
         }
     }
+    @Published var quota: QuotaSnapshot = .empty
+    @Published var quotaConnectUIStates: [AgentSourceID: QuotaConnectUIState] = [:]
+    @Published var enablesLimitMonitoring: Bool {
+        didSet {
+            UserDefaults.standard.set(enablesLimitMonitoring, forKey: Self.enablesLimitMonitoringKey)
+            guard !isInitializing else { return }
+            refreshQuota()
+        }
+    }
 
     private let ingestor: UsageIngestor?
     private let aggregation: UsageAggregationService?
     private let allSourceDescriptors: [AgentSourceDescriptor]
+    private let quotaService: QuotaService
+    private let quotaConnectionManager = QuotaConnectionManager()
     private var locallyDiscoveredSourceIDs = Set<AgentSourceID>()
     private var autoRefreshCoordinator: UsageAutoRefreshCoordinator?
     private var pendingRefresh = false
     private var lastTodaySpend: Decimal?
+    private var quotaRefreshTimer: Timer?
+    private var isInitializing = true
 
     init() {
         let registry = AdapterRegistry()
@@ -112,7 +137,17 @@ final class AppViewModel: ObservableObject {
         self.allSourceDescriptors = registry.descriptors
         self.hiddenAgentSourceIDs = Self.loadHiddenAgentSourceIDs()
         self.showsSpendInMenuBar = Self.loadShowsSpendInMenuBar()
+        self.enablesLimitMonitoring = Self.loadEnablesLimitMonitoring()
         self.snapshot = .empty()
+
+        let enablesLimitMonitoringKey = Self.enablesLimitMonitoringKey
+        let capturedEnablesLimitMonitoring: @Sendable () -> Bool = {
+            UserDefaults.standard.object(forKey: enablesLimitMonitoringKey) as? Bool ?? true
+        }
+        self.quotaService = QuotaService(
+            connectionManager: quotaConnectionManager,
+            isEnabled: capturedEnablesLimitMonitoring
+        )
 
         do {
             let database = try UsageDatabase(path: UsageDatabase.defaultStorePath())
@@ -134,10 +169,75 @@ final class AppViewModel: ObservableObject {
         Task {
             await GitHubReleaseUpdater.checkForUpdates()
         }
+
+        refreshQuota()
+        startQuotaRefreshTimer()
+        isInitializing = false
     }
 
     deinit {
         autoRefreshCoordinator?.stop()
+        quotaRefreshTimer?.invalidate()
+    }
+
+    /// Refreshes quota state independently of the local-cost scan pipeline —
+    /// not tied to FSEvents/ingestor churn, just called on launch, popover
+    /// open, manual refresh, and the timer below.
+    func refreshQuota() {
+        Task { [quotaService] in
+            let next = await quotaService.snapshot()
+            await MainActor.run {
+                quota = next
+            }
+        }
+    }
+
+    /// Connects a quota source. Codex runs the loopback browser OAuth flow
+    /// (spinner shown meanwhile); Claude imports Claude Code's existing token
+    /// and either succeeds immediately or fails with "sign in to Claude Code
+    /// first". Both surface failures inline via `quotaConnectUIStates`.
+    func connectQuota(_ provider: AgentSourceID) {
+        if provider == .codexQuota {
+            quotaConnectUIStates[provider] = .waitingForBrowser
+        }
+        Task { [quotaConnectionManager] in
+            do {
+                try await quotaConnectionManager.connect(provider)
+                await MainActor.run {
+                    quotaConnectUIStates[provider] = nil
+                    refreshQuota()
+                }
+            } catch {
+                await MainActor.run {
+                    quotaConnectUIStates[provider] = .failed(error.localizedDescription)
+                }
+            }
+        }
+    }
+
+    /// Dismisses an inline connect error (user tapped "取消/Cancel").
+    func cancelQuotaConnect(_ provider: AgentSourceID) {
+        quotaConnectUIStates[provider] = nil
+    }
+
+    func disconnectQuota(_ provider: AgentSourceID) {
+        quotaConnectionManager.disconnect(provider)
+        quotaConnectUIStates[provider] = nil
+        refreshQuota()
+    }
+
+    /// Simple ~5-minute cadence; deliberately not adaptive/backing-off beyond
+    /// "the timer interval is generous enough not to hammer a failing
+    /// endpoint" per the v1 scope.
+    private func startQuotaRefreshTimer() {
+        quotaRefreshTimer?.invalidate()
+        let timer = Timer(timeInterval: 5 * 60, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                self?.refreshQuota()
+            }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        quotaRefreshTimer = timer
     }
 
     func setHiddenAgentSourceIDs(_ hiddenSourceIDs: Set<AgentSourceID>) {
@@ -147,6 +247,7 @@ final class AppViewModel: ObservableObject {
     }
 
     func refresh() {
+        refreshQuota()
         guard ingestor != nil else { return }
         guard !isRefreshing else {
             pendingRefresh = true
@@ -287,6 +388,7 @@ final class AppViewModel: ObservableObject {
 
     private static let hiddenAgentSourceIDsKey = "hiddenAgentSourceIDs"
     private static let showsSpendInMenuBarKey = "showsSpendInMenuBar"
+    private static let enablesLimitMonitoringKey = "enablesLimitMonitoring"
 
     private static func loadHiddenAgentSourceIDs() -> Set<AgentSourceID> {
         let rawValues = UserDefaults.standard.stringArray(forKey: hiddenAgentSourceIDsKey) ?? []
@@ -295,6 +397,10 @@ final class AppViewModel: ObservableObject {
 
     private static func loadShowsSpendInMenuBar() -> Bool {
         UserDefaults.standard.object(forKey: showsSpendInMenuBarKey) as? Bool ?? true
+    }
+
+    private static func loadEnablesLimitMonitoring() -> Bool {
+        UserDefaults.standard.object(forKey: enablesLimitMonitoringKey) as? Bool ?? true
     }
 
     private static func saveHiddenAgentSourceIDs(_ ids: Set<AgentSourceID>) {
