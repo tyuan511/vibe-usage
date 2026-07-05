@@ -11,9 +11,11 @@ public struct MenuBarUsageView: View {
     let hiddenAgentSourceIDs: Set<AgentSourceID>
     @Binding var selectedDateRange: UsageDateRangePreset
     @Binding var selectedModelFilter: Set<String>
+    @Binding var showsSpendInMenuBar: Bool
     let onRefresh: () -> Void
     let onFilterChange: () -> Void
     let onAgentDisplayCommit: (_ hiddenSourceIDs: Set<AgentSourceID>) -> Void
+    let onOpenDashboard: () -> Void
     let onQuit: () -> Void
     @State private var showsAgentSettings = false
     @State private var draftHiddenAgentSourceIDs = Set<AgentSourceID>()
@@ -26,9 +28,11 @@ public struct MenuBarUsageView: View {
         hiddenAgentSourceIDs: Set<AgentSourceID>,
         selectedDateRange: Binding<UsageDateRangePreset>,
         selectedModelFilter: Binding<Set<String>>,
+        showsSpendInMenuBar: Binding<Bool>,
         onRefresh: @escaping () -> Void,
         onFilterChange: @escaping () -> Void,
         onAgentDisplayCommit: @escaping (Set<AgentSourceID>) -> Void,
+        onOpenDashboard: @escaping () -> Void,
         onQuit: @escaping () -> Void
     ) {
         self.snapshot = snapshot
@@ -38,9 +42,11 @@ public struct MenuBarUsageView: View {
         self.hiddenAgentSourceIDs = hiddenAgentSourceIDs
         self._selectedDateRange = selectedDateRange
         self._selectedModelFilter = selectedModelFilter
+        self._showsSpendInMenuBar = showsSpendInMenuBar
         self.onRefresh = onRefresh
         self.onFilterChange = onFilterChange
         self.onAgentDisplayCommit = onAgentDisplayCommit
+        self.onOpenDashboard = onOpenDashboard
         self.onQuit = onQuit
     }
 
@@ -106,6 +112,17 @@ public struct MenuBarUsageView: View {
             GlassEffectContainer {
                 HStack(spacing: 7) {
                     dateRangeMenu
+
+                    Button(action: onOpenDashboard) {
+                        Image(systemName: "chart.xyaxis.line")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(Color(nsColor: .secondaryLabelColor))
+                            .frame(width: 18, height: 18)
+                    }
+                    .buttonStyle(.plain)
+                    .controlSize(.small)
+                    .frame(width: 28, height: 28)
+                    .help(UIStrings.text(zh: "打开控制台", en: "Open Console"))
 
                     Button(action: onRefresh) {
                         Image(systemName: isRefreshing ? "hourglass" : "arrow.clockwise")
@@ -188,7 +205,7 @@ public struct MenuBarUsageView: View {
         if snapshot.models.isEmpty {
             MenuEmptyState(text: UIStrings.text(zh: "暂无模型活动", en: "No model activity"))
         } else {
-            ScrollView {
+            MenuScrollList(height: modelsListHeight) {
                 VStack(spacing: 0) {
                     ForEach(Array(snapshot.models.enumerated()), id: \.element.id) { index, model in
                         ModelMetricRow(model: model)
@@ -197,9 +214,8 @@ public struct MenuBarUsageView: View {
                         }
                     }
                 }
+                .padding(8)
             }
-            .frame(height: modelsListHeight)
-            .padding(8)
             .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 12))
         }
     }
@@ -228,20 +244,24 @@ public struct MenuBarUsageView: View {
     @ViewBuilder
     private var agentsList: some View {
         if showsAgentSettings {
-            if configurableAgentSources.isEmpty {
-                MenuEmptyState(text: UIStrings.text(zh: "没有本地 Agent", en: "No local agents"))
-            } else {
-                VStack(spacing: 0) {
-                    ForEach(Array(configurableAgentSources.enumerated()), id: \.element.id) { index, descriptor in
-                        agentSettingsRow(for: descriptor)
-                        if index < configurableAgentSources.count - 1 {
-                            Divider().padding(.leading, 26)
+            VStack(alignment: .leading, spacing: 7) {
+                showsSpendInMenuBarRow
+
+                if configurableAgentSources.isEmpty {
+                    MenuEmptyState(text: UIStrings.text(zh: "没有本地 Agent", en: "No local agents"))
+                } else {
+                    VStack(spacing: 0) {
+                        ForEach(Array(configurableAgentSources.enumerated()), id: \.element.id) { index, descriptor in
+                            agentSettingsRow(for: descriptor)
+                            if index < configurableAgentSources.count - 1 {
+                                Divider().padding(.leading, 26)
+                            }
                         }
                     }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 12))
                 }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 12))
             }
         } else if snapshot.sources.isEmpty {
             MenuEmptyState(text: UIStrings.text(zh: "暂无 Agent 数据", en: "No agent data"))
@@ -305,6 +325,24 @@ public struct MenuBarUsageView: View {
                 onFilterChange()
             }
         )
+    }
+
+    private var showsSpendInMenuBarRow: some View {
+        HStack(spacing: 8) {
+            Text(UIStrings.text(zh: "菜单栏显示今日花费", en: "Show today's spend in menu bar"))
+                .font(.callout)
+                .lineLimit(1)
+            Spacer(minLength: 8)
+            Toggle(isOn: $showsSpendInMenuBar) {
+                EmptyView()
+            }
+            .toggleStyle(.checkbox)
+            .controlSize(.small)
+            .labelsHidden()
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 12))
     }
 
     private func agentSettingsRow(for descriptor: AgentSourceDescriptor) -> some View {

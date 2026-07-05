@@ -10,6 +10,27 @@ public extension Decimal {
         formatter.maximumFractionDigits = self < 1 ? 4 : 2
         return formatter.string(from: self as NSDecimalNumber) ?? "$0.00"
     }
+
+    /// Adaptive currency formatting for large, skewed spend values (a single
+    /// heavy source can run into the thousands): `< $1000` behaves like
+    /// `usdString`; `>= $1000` drops fractional cents (`$2,457`); `>= $10,000`
+    /// compacts to one decimal with a `K` suffix (`$8.1K`).
+    var usdCompactString: String {
+        let magnitude = abs(self)
+        if magnitude >= 10_000 {
+            let thousands = (self as NSDecimalNumber).doubleValue / 1_000
+            return "$" + String(format: "%.1f", thousands) + "K"
+        }
+        if magnitude >= 1_000 {
+            let formatter = NumberFormatter()
+            formatter.numberStyle = .currency
+            formatter.currencyCode = "USD"
+            formatter.currencySymbol = "$"
+            formatter.maximumFractionDigits = 0
+            return formatter.string(from: self as NSDecimalNumber) ?? usdString
+        }
+        return usdString
+    }
 }
 
 extension Int {

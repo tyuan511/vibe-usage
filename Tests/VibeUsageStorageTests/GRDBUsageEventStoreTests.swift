@@ -6,6 +6,8 @@ import VibeUsageCore
 private func makeEvent(
     sourceID: AgentSourceID = .claudeCode,
     timestamp: Date = Date(timeIntervalSince1970: 1_700_000_000),
+    sessionID: String = "session",
+    projectOrWorkspace: String? = nil,
     model: String = "claude-sonnet-4-20250514",
     modelFamily: String = "claude-sonnet-4",
     tokens: TokenCounts = TokenCounts(input: 100, output: 50),
@@ -18,8 +20,8 @@ private func makeEvent(
     UsageEvent(
         sourceID: sourceID,
         timestamp: timestamp,
-        sessionID: "session",
-        projectOrWorkspace: nil,
+        sessionID: sessionID,
+        projectOrWorkspace: projectOrWorkspace,
         requestID: nil,
         model: model,
         modelFamily: modelFamily,
@@ -182,3 +184,53 @@ private func makeStore() throws -> GRDBUsageEventStore {
     #expect(breakdown.map(\.modelFamily) == ["claude-opus-4", "claude-haiku"])
     #expect(breakdown[0].eventCount == 1)
 }
+
+@Test func projectBreakdownGroupsByProjectAndSourceOrdersByCostDescending() throws {
+    let store = try makeStore()
+    let claudeFile = DiscoveredFile(path: "/tmp/claude.jsonl", sourceID: .claudeCode)
+    let codexFile = DiscoveredFile(path: "/tmp/codex.jsonl", sourceID: .codexCLI)
+
+    // Project A / Claude: two sessions, two events.
+    let aEvent1 = makeEvent(
+        sourceID: .claudeCode, sessionID: "session-a1", projectOrWorkspace: "project-a",
+        tokens: TokenCounts(input: 10), costUSD: 1, dedupKey: "a1", sourceFilePath: claudeFile.path
+    )
+    let aEvent2 = makeEvent(
+        sourceID: .claudeCode, sessionID: "session-a2", projectOrWorkspace: "project-a",
+        tokens: TokenCounts(input: 20), costUSD: 2, dedupKey: "a2", sourceFilePath: claudeFile.path
+    )
+    // Project B / Codex: one session, high cost so it sorts first.
+    let bEvent = makeEvent(
+        sourceID: .codexCLI, sessionID: "session-b1", projectOrWorkspace: "project-b",
+        tokens: TokenCounts(input: 5), costUSD: 50, dedupKey: "b1", sourceFilePath: codexFile.path
+    )
+    // NULL project should be grouped under "".
+    let noProjectEvent = makeEvent(
+        sourceID: .claudeCode, sessionID: "session-none", projectOrWorkspace: nil,
+        tokens: TokenCounts(input: 1), costUSD: 0.5, dedupKey: "none", sourceFilePath: claudeFile.path
+    )
+
+    try store.applyParseResult(ParseResult(events: [aEvent1, aEvent2, noProjectEvent], newCheckpoint: .start), file: claudeFile, fileSize: 1, fileModifiedAt: nil)
+    try store.applyParseResult(ParseResult(events: [bEvent], newCheckpoint: .start), file: codexFile, fileSize: 1, fileModifiedAt: nil)
+
+    let breakdown = try store.projectBreakdown(sourceFilter: [], startDay: "2023-01-01", endDay: "2023-12-31")
+
+    #expect(breakdown.count == 3)
+    #expect(breakdown[0].project == "project-b")
+    #expect(breakdown[0].sourceID == .codexCLI)
+    #expect(breakdown[0].costUSD == 50)
+    #expect(breakdown[0].sessionCount == 1)
+
+    let projectA = try #require(breakdown.first { $0.project == "project-a" })
+    #expect(projectA.sourceID == .claudeCode)
+    #expect(projectA.costUSD == 3)
+    #expect(projectA.eventCount == 2)
+    #expect(projectA.sessionCount == 2)
+    #expect(projectA.tokens.input == 30)
+
+    let unknownProject = try #require(breakdown.first { $0.project == "" })
+    #expect(unknownProject.sourceID == .claudeCode)
+    #expect(unknownProject.costUSD == 0.5)
+    #expect(unknownProject.sessionCount == 1)
+}
+
