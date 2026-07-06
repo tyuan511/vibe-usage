@@ -25,9 +25,19 @@ private func parseHermesDatabase(path: String, descriptor: AgentSourceDescriptor
     let db = try DatabaseQueue(path: path)
     return try db.read { database in
         guard try tableExists("sessions", in: database) else { return [] }
-        let costExpression = try columnExists("actual_cost", in: "sessions", database: database)
-            ? "CAST(COALESCE(actual_cost, estimated_cost) AS TEXT)"
-            : "CAST(estimated_cost AS TEXT)"
+        let hasActualCost = try columnExists("actual_cost", in: "sessions", database: database)
+        let hasEstimatedCost = try columnExists("estimated_cost", in: "sessions", database: database)
+        let costExpression: String
+        switch (hasActualCost, hasEstimatedCost) {
+        case (true, true):
+            costExpression = "CAST(COALESCE(actual_cost, estimated_cost) AS TEXT)"
+        case (true, false):
+            costExpression = "CAST(actual_cost AS TEXT)"
+        case (false, true):
+            costExpression = "CAST(estimated_cost AS TEXT)"
+        case (false, false):
+            costExpression = "NULL"
+        }
         return try Row.fetchAll(database, sql: "SELECT *, \(costExpression) AS vibe_cost FROM sessions").compactMap { row in
             let object = dictionary(from: row)
             guard let sessionID = firstString(in: object, keys: ["id", "session_id", "sessionId"]),
