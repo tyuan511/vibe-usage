@@ -141,6 +141,13 @@ func tableExists(_ name: String, in db: Database) throws -> Bool {
     try String.fetchOne(db, sql: "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?", arguments: [name]) != nil
 }
 
+func columnExists(_ column: String, in table: String, database: Database) throws -> Bool {
+    try Row.fetchAll(database, sql: "PRAGMA table_info(\(table))")
+        .contains { row in
+            String.fromDatabaseValue(row["name"])?.caseInsensitiveCompare(column) == .orderedSame
+        }
+}
+
 func jsonObject(from text: String) -> [String: Any]? {
     guard let data = text.data(using: .utf8) else { return nil }
     return try? JSONSerialization.jsonObject(with: data) as? [String: Any]

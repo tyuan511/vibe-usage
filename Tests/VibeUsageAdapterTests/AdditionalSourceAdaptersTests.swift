@@ -162,6 +162,56 @@ import VibeUsagePricing
     #expect(event.costUSD == Decimal(string: "0.03"))
 }
 
+@Test func hermesAdapterParsesSessionsWithoutActualCostColumn() throws {
+    let directory = FileManager.default.temporaryDirectory
+        .appendingPathComponent(UUID().uuidString, isDirectory: true)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    let url = directory.appendingPathComponent("state.db")
+    let queue = try DatabaseQueue(path: url.path)
+    try queue.write { db in
+        try db.execute(sql: """
+        CREATE TABLE sessions (
+          id TEXT,
+          started_at TEXT,
+          model TEXT,
+          provider TEXT,
+          message_count INTEGER,
+          input_tokens INTEGER,
+          output_tokens INTEGER,
+          cache_read_tokens INTEGER,
+          cache_creation_tokens INTEGER,
+          reasoning_tokens INTEGER,
+          estimated_cost REAL
+        )
+        """)
+        try db.execute(
+            sql: """
+            INSERT INTO sessions VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            arguments: [
+                "row-legacy",
+                "2026-06-01T12:00:00Z",
+                "gpt-5",
+                "openai",
+                3,
+                12,
+                34,
+                5,
+                6,
+                7,
+                0.02
+            ]
+        )
+    }
+
+    let adapter = try #require(AdditionalSourceAdapters.all.first { $0.descriptor.id.rawValue == "hermes-agent" })
+    let result = try adapter.parseIncrementally(fileAt: url.path, from: nil, pricing: BundledPricingProvider())
+
+    let event = try #require(result.events.first)
+    #expect(result.events.count == 1)
+    #expect(event.costUSD == Decimal(string: "0.02"))
+}
+
 @Test func openCodeAdapterParsesMessageTableRows() throws {
     let database = try TemporaryUsageDatabase(name: "opencode.db")
     try database.queue.write { db in
