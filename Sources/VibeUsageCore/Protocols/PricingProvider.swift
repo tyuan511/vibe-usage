@@ -31,13 +31,37 @@ public protocol PricingProvider: Sendable {
     ///   never a raw dated model id.
     /// - Returns: nil if no pricing entry is known for this family.
     func rate(forModelFamily modelFamily: String) -> ModelPricingRate?
+
+    /// Timestamp-aware lookup used when a source alias changed model families
+    /// over time. Providers without temporal aliases use the default lookup.
+    func rate(forModelFamily modelFamily: String, at timestamp: Date) -> ModelPricingRate?
 }
 
-/// Shared cost-calculation rules, reused by every adapter so the billing
-/// formula (cache-read/cache-write fallback to input rate, reasoning tokens
-/// never billed separately since they're already folded into `output`) is
-/// defined exactly once.
+public extension PricingProvider {
+    func rate(forModelFamily modelFamily: String, at _: Date) -> ModelPricingRate? {
+        rate(forModelFamily: modelFamily)
+    }
+}
+
+/// Shared cost-calculation rules, reused by adapters and historical repricing
+/// so cache and source-specific reasoning-token behavior is defined once.
 public enum CostCalculator {
+    /// Applies the source-specific reasoning-token convention used by adapters.
+    /// Codex reports reasoning as a subset of output; other sources report it
+    /// separately and therefore bill it at the output-token rate.
+    public static func cost(
+        for tokens: TokenCounts,
+        sourceID: AgentSourceID,
+        rate: ModelPricingRate
+    ) -> Decimal {
+        guard sourceID != .codexCLI else {
+            return cost(for: tokens, rate: rate)
+        }
+        var billableTokens = tokens
+        billableTokens.output += billableTokens.reasoning
+        return cost(for: billableTokens, rate: rate)
+    }
+
     public static func cost(for tokens: TokenCounts, rate: ModelPricingRate) -> Decimal {
         let million = Decimal(1_000_000)
         let cacheReadRate = rate.cacheReadPerMillion ?? rate.inputPerMillion

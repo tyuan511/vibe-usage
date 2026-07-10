@@ -12,6 +12,7 @@ private func makeEvent(
     modelFamily: String = "claude-sonnet-4",
     tokens: TokenCounts = TokenCounts(input: 100, output: 50),
     costUSD: Decimal = 1,
+    costIsEstimated: Bool = false,
     dedupKey: String = "dedup-1",
     isSidechainReplay: Bool = false,
     sourceFilePath: String = "/tmp/usage.jsonl",
@@ -27,12 +28,121 @@ private func makeEvent(
         modelFamily: modelFamily,
         tokens: tokens,
         costUSD: costUSD,
-        costIsEstimated: false,
+        costIsEstimated: costIsEstimated,
         dedupKey: dedupKey,
         isSidechainReplay: isSidechainReplay,
         sourceFilePath: sourceFilePath,
         sourceFileLine: sourceFileLine
     )
+}
+
+@Test func repricesEstimatedEventsWhenCurrentPricingBecomesAvailable() throws {
+    let store = try makeStore()
+    let file = DiscoveredFile(path: "/tmp/codex.jsonl", sourceID: .codexCLI)
+    let event = makeEvent(
+        sourceID: .codexCLI,
+        model: "gpt-5.6-sol",
+        modelFamily: "gpt-5.6-sol",
+        tokens: TokenCounts(
+            input: 1_000_000,
+            output: 100_000,
+            cacheCreate: 40_000,
+            cacheRead: 500_000
+        ),
+        costUSD: 0,
+        costIsEstimated: true,
+        dedupKey: "previously-unpriced",
+        sourceFilePath: file.path
+    )
+    try store.applyParseResult(
+        ParseResult(events: [event], newCheckpoint: .start),
+        file: file,
+        fileSize: 1,
+        fileModifiedAt: nil
+    )
+
+    let pricing = TestPricingProvider(rates: [
+        "gpt-5.6-sol": ModelPricingRate(
+            inputPerMillion: 5,
+            outputPerMillion: 30,
+            cacheWritePerMillion: 6.25,
+            cacheReadPerMillion: 0.5
+        )
+    ])
+    let updatedCount = try store.repriceEstimatedEvents(using: pricing)
+
+    #expect(updatedCount == 1)
+    let breakdown = try store.modelBreakdown(
+        sourceFilter: [],
+        startDay: "2023-01-01",
+        endDay: "2023-12-31"
+    )
+    let repriced = try #require(breakdown.first)
+    #expect(repriced.costUSD == Decimal(string: "8.5"))
+    #expect(repriced.estimatedEventCount == 0)
+    #expect(try store.repriceEstimatedEvents(using: pricing) == 0)
+}
+
+@Test func repricingPreservesUnresolvedAndFallbackEstimates() throws {
+    let store = try makeStore()
+    let file = DiscoveredFile(path: "/tmp/codex.jsonl", sourceID: .codexCLI)
+    let unresolved = makeEvent(
+        sourceID: .codexCLI,
+        model: "future-model",
+        modelFamily: "future-model",
+        tokens: TokenCounts(input: 1_000_000),
+        costUSD: 0,
+        costIsEstimated: true,
+        dedupKey: "unresolved",
+        sourceFilePath: file.path
+    )
+    let fallback = makeEvent(
+        sourceID: AgentSourceID(rawValue: "qwen"),
+        model: "gpt-fallback",
+        modelFamily: "gpt-fallback",
+        tokens: TokenCounts(output: 500_000, reasoning: 500_000),
+        costUSD: 1,
+        costIsEstimated: true,
+        dedupKey: "fallback",
+        sourceFilePath: file.path
+    )
+    let confirmed = makeEvent(
+        sourceID: .codexCLI,
+        model: "gpt-confirmed",
+        modelFamily: "gpt-confirmed",
+        tokens: TokenCounts(input: 1_000_000),
+        costUSD: 9,
+        costIsEstimated: false,
+        dedupKey: "confirmed",
+        sourceFilePath: file.path
+    )
+    try store.applyParseResult(
+        ParseResult(events: [unresolved, fallback, confirmed], newCheckpoint: .start),
+        file: file,
+        fileSize: 1,
+        fileModifiedAt: nil
+    )
+
+    let updatedCount = try store.repriceEstimatedEvents(using: TestPricingProvider(rates: [
+        "gpt-fallback": ModelPricingRate(inputPerMillion: 2, outputPerMillion: 2),
+        "gpt-confirmed": ModelPricingRate(inputPerMillion: 3, outputPerMillion: 10),
+    ]))
+
+    #expect(updatedCount == 1)
+    let breakdown = try store.modelBreakdown(
+        sourceFilter: [],
+        startDay: "2023-01-01",
+        endDay: "2023-12-31"
+    )
+    let unresolvedRow = try #require(breakdown.first { $0.modelFamily == "future-model" })
+    #expect(unresolvedRow.costUSD == 0)
+    #expect(unresolvedRow.estimatedEventCount == 1)
+    let fallbackRow = try #require(breakdown.first { $0.modelFamily == "gpt-fallback" })
+    #expect(fallbackRow.costUSD == 2)
+    #expect(fallbackRow.estimatedEventCount == 1)
+    let confirmedRow = try #require(breakdown.first { $0.modelFamily == "gpt-confirmed" })
+    #expect(confirmedRow.costUSD == 9)
+    #expect(confirmedRow.estimatedEventCount == 0)
 }
 
 private func makeStore() throws -> GRDBUsageEventStore {
@@ -45,12 +155,24 @@ private func makeStore() throws -> GRDBUsageEventStore {
         id: .codexCLI, displayName: "Codex CLI", shortLabel: "Codex",
         iconSystemName: "circle", tintColorHex: "#000000", sortOrder: 1
     ))
+    try store.ensureSourceRegistered(AgentSourceDescriptor(
+        id: AgentSourceID(rawValue: "qwen"), displayName: "Qwen", shortLabel: "Qwen",
+        iconSystemName: "circle", tintColorHex: "#000000", sortOrder: 2
+    ))
     return store
 }
 
 @Test func fileMetadataIsNilBeforeAnyParse() throws {
     let store = try makeStore()
     #expect(try store.fileMetadata(forFile: "/tmp/never-seen.jsonl") == nil)
+}
+
+private struct TestPricingProvider: PricingProvider {
+    let rates: [String: ModelPricingRate]
+
+    func rate(forModelFamily modelFamily: String) -> ModelPricingRate? {
+        rates[modelFamily]
+    }
 }
 
 @Test func applyParseResultPersistsEventsAndCheckpoint() throws {
@@ -233,4 +355,3 @@ private func makeStore() throws -> GRDBUsageEventStore {
     #expect(unknownProject.costUSD == 0.5)
     #expect(unknownProject.sessionCount == 1)
 }
-

@@ -153,6 +153,7 @@ final class AppViewModel: ObservableObject {
             let database = try UsageDatabase(path: UsageDatabase.defaultStorePath())
             let store = GRDBUsageEventStore(database: database)
             let pricing = BundledPricingProvider()
+            _ = try store.repriceEstimatedEvents(using: pricing)
             self.ingestor = UsageIngestor(registry: registry, store: store, pricing: pricing)
             self.aggregation = UsageAggregationService(store: store, registry: registry)
 

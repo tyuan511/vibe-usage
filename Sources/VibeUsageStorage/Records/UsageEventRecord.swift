@@ -28,6 +28,16 @@ struct UsageEventRecord: Codable, FetchableRecord, PersistableRecord {
     var sourceFileLine: Int?
     var createdAt: Date
 
+    var tokens: TokenCounts {
+        TokenCounts(
+            input: inputTokens,
+            output: outputTokens,
+            cacheCreate: cacheCreateTokens,
+            cacheRead: cacheReadTokens,
+            reasoning: reasoningTokens
+        )
+    }
+
     init(id: Int64? = nil, event: UsageEvent, createdAt: Date = Date()) {
         self.id = id
         self.sourceId = event.sourceID.rawValue
@@ -60,13 +70,7 @@ struct UsageEventRecord: Codable, FetchableRecord, PersistableRecord {
             requestID: requestId,
             model: modelRaw,
             modelFamily: modelFamily,
-            tokens: TokenCounts(
-                input: inputTokens,
-                output: outputTokens,
-                cacheCreate: cacheCreateTokens,
-                cacheRead: cacheReadTokens,
-                reasoning: reasoningTokens
-            ),
+            tokens: tokens,
             costUSD: Decimal(costUsd),
             costIsEstimated: costIsEstimated,
             dedupKey: dedupKey,

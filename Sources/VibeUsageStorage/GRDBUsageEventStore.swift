@@ -52,6 +52,33 @@ public final class GRDBUsageEventStore: UsageEventStore, Sendable {
         }
     }
 
+    public func repriceEstimatedEvents(using pricing: any PricingProvider) throws -> Int {
+        try dbQueue.write { db in
+            let records = try UsageEventRecord
+                .filter(Column("cost_is_estimated") == true)
+                .fetchAll(db)
+            var updatedCount = 0
+
+            for var record in records {
+                guard let rate = pricing.rate(forModelFamily: record.modelFamily, at: record.timestampUtc) else {
+                    continue
+                }
+                let wasUnpriced = record.costUsd == 0
+                let sourceID = AgentSourceID(rawValue: record.sourceId)
+                let updatedCost = (CostCalculator.cost(for: record.tokens, sourceID: sourceID, rate: rate) as NSDecimalNumber).doubleValue
+                let remainsEstimated = !wasUnpriced
+                guard record.costUsd != updatedCost || record.costIsEstimated != remainsEstimated else {
+                    continue
+                }
+                record.costUsd = updatedCost
+                record.costIsEstimated = remainsEstimated
+                try record.update(db)
+                updatedCount += 1
+            }
+            return updatedCount
+        }
+    }
+
     public func resetFile(_ path: String) throws {
         try dbQueue.write { db in
             try UsageEventRecord.filter(Column("source_file_path") == path).deleteAll(db)
@@ -324,4 +351,3 @@ public struct ProjectBreakdownRow: Sendable, Equatable {
     public let eventCount: Int
     public let sessionCount: Int
 }
-

@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 import VibeUsageCore
 @testable import VibeUsagePricing
@@ -49,6 +50,36 @@ import VibeUsageCore
     for (model, expected) in expectedRates {
         #expect(provider.rate(forModelFamily: model) == expected)
     }
+}
+
+@Test func resolvesStoredAliasesForHistoricalRepricing() throws {
+    let provider = BundledPricingProvider()
+    #expect(
+        provider.rate(forModelFamily: "gemini-3-pro-high")
+            == provider.rate(forModelFamily: "gemini-3-pro-preview")
+    )
+    #expect(
+        provider.rate(forModelFamily: "k2p6")
+            == provider.rate(forModelFamily: "kimi-k2.6")
+    )
+    #expect(
+        provider.rate(forModelFamily: "claude-sonnet-4.5")
+            == provider.rate(forModelFamily: "claude-sonnet-4-5")
+    )
+    #expect(
+        provider.rate(forModelFamily: "claude-opus-45")
+            == provider.rate(forModelFamily: "claude-opus-4-5")
+    )
+
+    let cutoff = Date(timeIntervalSince1970: 1_776_698_890.072)
+    #expect(
+        provider.rate(forModelFamily: "kimi-for-coding", at: cutoff.addingTimeInterval(-1))
+            == provider.rate(forModelFamily: "kimi-k2.5")
+    )
+    #expect(
+        provider.rate(forModelFamily: "kimi-for-coding", at: cutoff)
+            == provider.rate(forModelFamily: "kimi-k2.6")
+    )
 }
 
 @Test func missingFamilyReturnsNilRatherThanGuessing() {

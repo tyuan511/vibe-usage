@@ -134,7 +134,7 @@ public struct ClaudeCodeAdapter: UsageSourceAdapter {
         guard let rate = pricing.rate(forModelFamily: modelFamily) else {
             return (0, true)
         }
-        return (CostCalculator.cost(for: tokens, rate: rate), false)
+        return (CostCalculator.cost(for: tokens, sourceID: .claudeCode, rate: rate), false)
     }
 
     private static func dedupKey(messageID: String?, requestID _: String?, fallbackPath: String, line: Int) -> String {

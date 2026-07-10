@@ -42,14 +42,8 @@ func makeEvent(
     line: Int?
 ) -> UsageEvent {
     let family = ModelAliasResolver.resolveFamily(fromRawModel: model)
-    let costTokens = TokenCounts(
-        input: tokens.input,
-        output: tokens.output + tokens.reasoning,
-        cacheCreate: tokens.cacheCreate,
-        cacheRead: tokens.cacheRead
-    )
     let rate = firstPricingRate(for: pricingCandidates ?? [model], pricing: pricing)
-    let cost = displayCost ?? rate.map { CostCalculator.cost(for: costTokens, rate: $0) } ?? 0
+    let cost = displayCost ?? rate.map { CostCalculator.cost(for: tokens, sourceID: sourceID, rate: $0) } ?? 0
     return UsageEvent(
         sourceID: sourceID,
         timestamp: timestamp,

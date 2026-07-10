@@ -21,4 +21,47 @@ public enum ModelAliasResolver {
         }
         return String(model[model.startIndex..<range.lowerBound])
     }
+
+    public static func pricingCandidates(fromRawModel model: String, at timestamp: Date?) -> [String] {
+        let bareModel = model.split(separator: "/").last.map(String.init) ?? model
+        let family = resolveFamily(fromRawModel: bareModel)
+        var candidates = [family]
+        let normalizedClaudeFamily = normalizeClaudeVersion(from: family)
+        if normalizedClaudeFamily != family {
+            candidates.append(normalizedClaudeFamily)
+        }
+
+        switch family {
+        case "gemini-3-pro-high":
+            candidates.append("gemini-3-pro-preview")
+        case "k2p6":
+            candidates.append("kimi-k2.6")
+        case "kimi-for-coding":
+            let kimiForCodingK26Cutover = Date(timeIntervalSince1970: 1_776_698_890.072)
+            candidates.append((timestamp ?? .distantFuture) < kimiForCodingK26Cutover ? "kimi-k2.5" : "kimi-k2.6")
+        default:
+            break
+        }
+
+        var seen = Set<String>()
+        return candidates.filter { seen.insert($0).inserted }
+    }
+
+    public static func normalizeClaudeVersion(from model: String) -> String {
+        for family in ["claude-haiku-", "claude-opus-", "claude-sonnet-"] where model.hasPrefix(family) {
+            let rest = String(model.dropFirst(family.count))
+            if let dot = rest.firstIndex(of: ".") {
+                let major = String(rest[..<dot])
+                let suffix = String(rest[rest.index(after: dot)...])
+                if major.allSatisfy(\.isNumber), suffix.first?.isNumber == true {
+                    return "\(family)\(major)-\(suffix)"
+                }
+            }
+            let characters = Array(rest)
+            if characters.count >= 2, characters[0].isNumber, characters[1].isNumber {
+                return "\(family)\(characters[0])-\(String(characters.dropFirst()))"
+            }
+        }
+        return model
+    }
 }

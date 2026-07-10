@@ -28,7 +28,15 @@ public final class BundledPricingProvider: PricingProvider {
     }
 
     public func rate(forModelFamily modelFamily: String) -> ModelPricingRate? {
-        rates[modelFamily]
+        rate(forCandidates: ModelAliasResolver.pricingCandidates(fromRawModel: modelFamily, at: nil))
+    }
+
+    public func rate(forModelFamily modelFamily: String, at timestamp: Date) -> ModelPricingRate? {
+        rate(forCandidates: ModelAliasResolver.pricingCandidates(fromRawModel: modelFamily, at: timestamp))
+    }
+
+    private func rate(forCandidates candidates: [String]) -> ModelPricingRate? {
+        candidates.lazy.compactMap { self.rates[$0] }.first
     }
 
     private static func loadRates(from bundle: Bundle) -> [String: ModelPricingRate] {

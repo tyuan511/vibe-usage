@@ -36,6 +36,11 @@ public protocol UsageEventStore: Sendable {
         fileModifiedAt: Date?
     ) throws
 
+    /// Recalculates previously estimated events whose model now has a pricing
+    /// entry. Previously unpriced events become confirmed; existing nonzero
+    /// estimates remain marked as estimated. Returns the number of changed rows.
+    func repriceEstimatedEvents(using pricing: any PricingProvider) throws -> Int
+
     /// Removes all persisted events and parse state for `path`. Used when a
     /// file is detected as truncated/rewritten (its recorded size shrank),
     /// forcing a clean reparse from the start.

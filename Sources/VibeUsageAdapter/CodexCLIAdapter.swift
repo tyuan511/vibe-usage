@@ -104,7 +104,7 @@ public struct CodexCLIAdapter: UsageSourceAdapter {
             guard tokens.input + tokens.output + tokens.cacheRead + tokens.reasoning > 0 else { continue }
 
             let rate = pricing.rate(forModelFamily: modelFamily)
-            let cost = rate.map { CostCalculator.cost(for: tokens, rate: $0) } ?? 0
+            let cost = rate.map { CostCalculator.cost(for: tokens, sourceID: descriptor.id, rate: $0) } ?? 0
 
             events.append(UsageEvent(
                 sourceID: descriptor.id,

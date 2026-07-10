@@ -87,7 +87,7 @@ private func isOpenCodeDatabase(_ url: URL) -> Bool {
 
 private func openCodeModelCandidates(model: String, provider: String) -> [String] {
     let resolved = resolveOpenCodeModelName(model)
-    let normalized = normalizeOpenCodeModelName(resolved)
+    let normalized = ModelAliasResolver.normalizeClaudeVersion(from: resolved)
     var base = [resolved]
     if normalized != resolved {
         base.append(normalized)
@@ -109,22 +109,4 @@ private func resolveOpenCodeModelName(_ model: String) -> String {
     default:
         return model
     }
-}
-
-private func normalizeOpenCodeModelName(_ model: String) -> String {
-    for family in ["claude-haiku-", "claude-opus-", "claude-sonnet-"] where model.hasPrefix(family) {
-        let rest = String(model.dropFirst(family.count))
-        if let dot = rest.firstIndex(of: ".") {
-            let major = String(rest[..<dot])
-            let suffix = String(rest[rest.index(after: dot)...])
-            if major.allSatisfy(\.isNumber), suffix.first?.isNumber == true {
-                return "\(family)\(major)-\(suffix)"
-            }
-        }
-        let chars = Array(rest)
-        if chars.count >= 2, chars[0].isNumber, chars[1].isNumber {
-            return "\(family)\(chars[0])-\(String(chars.dropFirst()))"
-        }
-    }
-    return model
 }
