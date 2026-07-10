@@ -83,7 +83,8 @@ public struct MenuBarUsageView: View {
                     MenuMetricCard(
                         title: UIStrings.tokens,
                         value: snapshot.totals.tokens.total.compactString,
-                        systemImage: "number.circle"
+                        systemImage: "number.circle",
+                        detail: cacheReadDetailText
                     )
                 }
             }
@@ -109,6 +110,11 @@ public struct MenuBarUsageView: View {
         }
         .padding(14)
         .frame(width: 388)
+    }
+
+    private var cacheReadDetailText: String? {
+        guard let ratio = snapshot.totals.tokens.cacheReadRatio else { return nil }
+        return "\(UIStrings.cacheRead) \(UIStrings.percentage(ratio))"
     }
 
     private var menuHeader: some View {

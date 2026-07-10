@@ -29,12 +29,20 @@ struct SourceMetricRow: View {
             VStack(alignment: .trailing, spacing: 1) {
                 Text(UIStrings.costLabel(source.totals.costUSD.usdString, estimated: source.hasEstimatedCost))
                     .font(.callout.monospacedDigit())
-                Text(source.totals.tokens.total.compactString)
+                Text(tokenDetailText)
                     .font(.caption2)
                     .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
             }
         }
         .padding(.vertical, 6)
+    }
+
+    private var tokenDetailText: String {
+        let total = source.totals.tokens.total.compactString
+        guard let ratio = source.totals.tokens.cacheReadRatio else { return total }
+        return "\(total) · \(UIStrings.cacheRead) \(UIStrings.percentage(ratio))"
     }
 }
 

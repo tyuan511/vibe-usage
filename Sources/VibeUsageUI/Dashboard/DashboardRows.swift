@@ -91,6 +91,7 @@ struct AgentSpendTile: View {
     let descriptor: AgentSourceDescriptor
     let costUSD: Decimal
     let share: Double // 0...1
+    let cacheReadRatio: Double?
     let tint: Color
 
     var body: some View {
@@ -103,11 +104,27 @@ struct AgentSpendTile: View {
                 Spacer(minLength: 0)
             }
 
-            Text(costUSD.usdCompactString)
-                .font(.title3.weight(.semibold))
-                .monospacedDigit()
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
+            HStack(alignment: .lastTextBaseline, spacing: 8) {
+                Text(costUSD.usdCompactString)
+                    .font(.title3.weight(.semibold))
+                    .monospacedDigit()
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+
+                Spacer(minLength: 0)
+
+                if let cacheReadRatio {
+                    VStack(alignment: .trailing, spacing: 1) {
+                        Text(UIStrings.cacheRead)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                        Text(UIStrings.percentage(cacheReadRatio))
+                            .font(.subheadline.weight(.semibold))
+                            .monospacedDigit()
+                    }
+                    .fixedSize(horizontal: true, vertical: false)
+                }
+            }
 
             ShareCapsule(progress: share, tint: tint)
 

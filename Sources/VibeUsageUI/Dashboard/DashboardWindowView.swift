@@ -241,14 +241,22 @@ public struct DashboardWindowView: View {
             }
             .frame(width: 220, alignment: .leading)
 
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 4), spacing: 10) {
+            LazyVGrid(columns: heroStatColumns, spacing: 10) {
                 HeroStatTile(title: UIStrings.tokens, value: snapshot.totals.tokens.total.compactString)
+                if let cacheReadRatio = snapshot.totals.tokens.cacheReadRatio {
+                    HeroStatTile(title: UIStrings.cacheRead, value: UIStrings.percentage(cacheReadRatio))
+                }
                 HeroStatTile(title: UIStrings.text(zh: "请求数", en: "Requests"), value: snapshot.totals.eventCount.compactString)
                 HeroStatTile(title: UIStrings.text(zh: "活跃天数", en: "Active days"), value: activeDaysText)
                 HeroStatTile(title: UIStrings.text(zh: "日均花费", en: "Daily avg"), value: dailyAverageText)
             }
             .frame(maxWidth: .infinity)
         }
+    }
+
+    private var heroStatColumns: [GridItem] {
+        let count = snapshot.totals.tokens.cacheReadRatio == nil ? 4 : 5
+        return Array(repeating: GridItem(.flexible(), spacing: 10), count: count)
     }
 
     private var activeDaysText: String {
@@ -314,6 +322,7 @@ public struct DashboardWindowView: View {
                             descriptor: source.descriptor,
                             costUSD: source.totals.costUSD,
                             share: shareOfTotal(source.totals.costUSD),
+                            cacheReadRatio: source.totals.tokens.cacheReadRatio,
                             tint: sourceColors[source.id] ?? DashboardTheme.color(for: source.id)
                         )
                     }

@@ -252,7 +252,8 @@ public struct DashboardShareCard: View {
         return LazyVGrid(columns: columns, spacing: 12) {
             PosterStatCard(
                 label: UIStrings.tokens,
-                value: snapshot.totals.tokens.total.compactString
+                value: snapshot.totals.tokens.total.compactString,
+                detail: cacheReadDetailText
             )
             PosterStatCard(
                 label: UIStrings.text(zh: "请求数", en: "Requests"),
@@ -273,6 +274,11 @@ public struct DashboardShareCard: View {
         UIStrings.text(zh: "\(snapshot.activeDayCount) 天", en: "\(snapshot.activeDayCount)")
     }
 
+    private var cacheReadDetailText: String? {
+        guard let ratio = snapshot.totals.tokens.cacheReadRatio else { return nil }
+        return "\(UIStrings.cacheRead) \(UIStrings.percentage(ratio))"
+    }
+
     // MARK: - Superlative row ("王者" cards)
 
     @ViewBuilder
@@ -290,7 +296,7 @@ public struct DashboardShareCard: View {
                                 .font(.system(size: 16, weight: .bold, design: .rounded))
                                 .foregroundStyle(Poster.white100)
                                 .lineLimit(1)
-                            Text(topSourceShareText)
+                            Text(topSourceDetailText)
                                 .font(.system(size: 12, weight: .medium, design: .rounded))
                                 .foregroundStyle(Poster.white55)
                         }
@@ -330,6 +336,13 @@ public struct DashboardShareCard: View {
     private var topSourceShareText: String {
         let percent = Int((topSourceShare * 100).rounded())
         return UIStrings.text(zh: "占比 \(percent)%", en: "\(percent)% of spend")
+    }
+
+    private var topSourceDetailText: String {
+        guard let ratio = topSource?.totals.tokens.cacheReadRatio else {
+            return topSourceShareText
+        }
+        return "\(topSourceShareText) · \(UIStrings.cacheRead) \(UIStrings.percentage(ratio))"
     }
 
     // MARK: - Top project (slim full-width row)
@@ -447,6 +460,13 @@ private struct PosterDeltaBadge: View {
 private struct PosterStatCard: View {
     let label: String
     let value: String
+    let detail: String?
+
+    init(label: String, value: String, detail: String? = nil) {
+        self.label = label
+        self.value = value
+        self.detail = detail
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -459,6 +479,13 @@ private struct PosterStatCard: View {
                 .foregroundStyle(.white)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
+            if let detail {
+                Text(detail)
+                    .font(.system(size: 11, weight: .medium, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.55))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(20)

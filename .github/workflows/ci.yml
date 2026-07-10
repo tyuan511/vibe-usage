@@ -22,7 +22,7 @@ jobs:
         run: swift test
 
   preview:
-    name: Regenerate usage preview
+    name: Regenerate share preview
     runs-on: macos-26
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     permissions:
@@ -36,16 +36,16 @@ jobs:
         run: swift build -c release --product VibeUsagePreviewRenderer
 
       - name: Render preview
-        run: .build/release/VibeUsagePreviewRenderer docs/usage-preview.png
+        run: .build/release/VibeUsagePreviewRenderer docs/usage-share-preview.png --share-card
 
       - name: Commit preview if changed
         run: |
-          if git diff --quiet docs/usage-preview.png; then
+          if git diff --quiet docs/usage-share-preview.png; then
             echo "Preview unchanged."
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add docs/usage-preview.png
-          git commit -m "Update usage preview screenshot."
+          git add docs/usage-share-preview.png
+          git commit -m "Update share preview screenshot."
           git push

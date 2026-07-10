@@ -14,7 +14,7 @@ Thanks for helping improve VibeUsage. This guide covers the most common contribu
 make test          # run unit tests
 make app           # build debug .app
 make restart       # rebuild and relaunch locally
-make preview       # regenerate docs/usage-preview.png
+make preview       # regenerate docs/usage-share-preview.png
 make pricing       # refresh model_prices.json from LiteLLM
 make dmg           # build release DMG
 ```
@@ -40,9 +40,9 @@ python3 Scripts/update-pricing.py
 
 Then add/adjust tests in `Tests/VibeUsagePricingTests/` when new model families matter for supported agents.
 
-## UI preview
+## Share Poster Preview
 
-The menu bar preview image is generated from real SwiftUI code:
+The share poster preview image is generated from real SwiftUI code:
 
 ```bash
 Scripts/regenerate-preview.sh

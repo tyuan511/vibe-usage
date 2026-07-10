@@ -5,6 +5,14 @@ struct MenuMetricCard: View {
     let title: String
     let value: String
     let systemImage: String
+    let detail: String?
+
+    init(title: String, value: String, systemImage: String, detail: String? = nil) {
+        self.title = title
+        self.value = value
+        self.systemImage = systemImage
+        self.detail = detail
+    }
 
     var body: some View {
         HStack(alignment: .center, spacing: 10) {
@@ -21,6 +29,13 @@ struct MenuMetricCard: View {
                     .monospacedDigit()
                     .lineLimit(1)
                     .minimumScaleFactor(0.75)
+                if let detail {
+                    Text(detail)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                }
             }
         }
         .padding(10)

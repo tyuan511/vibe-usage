@@ -26,6 +26,19 @@ public struct TokenCounts: Sendable, Codable, Equatable {
 
     public var total: Int { input + output + cacheCreate + cacheRead + reasoning }
 
+    /// All input tokens that can participate in prompt caching. Output and
+    /// reasoning tokens are intentionally excluded because they are not part
+    /// of the input context reused by a cache read.
+    public var cacheableInputTotal: Int { input + cacheCreate + cacheRead }
+
+    /// The share of cacheable input tokens served from an existing cache.
+    /// Returns `nil` when no cache read was recorded so callers can omit the
+    /// metric instead of presenting missing cache data as a 0% hit rate.
+    public var cacheReadRatio: Double? {
+        guard cacheRead > 0, cacheableInputTotal > 0 else { return nil }
+        return Double(cacheRead) / Double(cacheableInputTotal)
+    }
+
     public static let zero = TokenCounts()
 
     public static func + (lhs: TokenCounts, rhs: TokenCounts) -> TokenCounts {

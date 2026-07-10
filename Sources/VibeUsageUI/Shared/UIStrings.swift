@@ -41,4 +41,9 @@ enum UIStrings {
     static func costLabel(_ amount: String, estimated: Bool) -> String {
         estimated ? text(zh: "\(amount) (估算)", en: "\(amount) (est.)") : amount
     }
+
+    static func percentage(_ ratio: Double) -> String {
+        let percent = Int((ratio * 100).rounded())
+        return percent == 0 && ratio > 0 ? "<1%" : "\(percent)%"
+    }
 }
