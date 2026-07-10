@@ -4,7 +4,7 @@ import Foundation
 public struct ModelPricingRate: Sendable, Equatable {
     public let inputPerMillion: Decimal
     public let outputPerMillion: Decimal
-    /// Rate for cache-write/cache-creation tokens (Claude only). Falls back to
+    /// Rate for cache-write/cache-creation tokens. Falls back to
     /// `inputPerMillion` when nil.
     public let cacheWritePerMillion: Decimal?
     /// Rate for cache-read tokens. Falls back to `inputPerMillion` when nil.

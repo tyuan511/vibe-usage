@@ -96,10 +96,10 @@
     "outputPerMillion": 15.0
   },
   "claude-sonnet-5": {
-    "cacheReadPerMillion": 0.3,
-    "cacheWritePerMillion": 3.75,
-    "inputPerMillion": 3.0,
-    "outputPerMillion": 15.0
+    "cacheReadPerMillion": 0.2,
+    "cacheWritePerMillion": 2.5,
+    "inputPerMillion": 2.0,
+    "outputPerMillion": 10.0
   },
   "codex-mini-latest": {
     "cacheReadPerMillion": 0.375,
@@ -718,6 +718,30 @@
     "inputPerMillion": 30.0,
     "outputPerMillion": 180.0
   },
+  "gpt-5.6": {
+    "cacheReadPerMillion": 0.5,
+    "cacheWritePerMillion": 6.25,
+    "inputPerMillion": 5.0,
+    "outputPerMillion": 30.0
+  },
+  "gpt-5.6-luna": {
+    "cacheReadPerMillion": 0.1,
+    "cacheWritePerMillion": 1.25,
+    "inputPerMillion": 1.0,
+    "outputPerMillion": 6.0
+  },
+  "gpt-5.6-sol": {
+    "cacheReadPerMillion": 0.5,
+    "cacheWritePerMillion": 6.25,
+    "inputPerMillion": 5.0,
+    "outputPerMillion": 30.0
+  },
+  "gpt-5.6-terra": {
+    "cacheReadPerMillion": 0.25,
+    "cacheWritePerMillion": 3.125,
+    "inputPerMillion": 2.5,
+    "outputPerMillion": 15.0
+  },
   "grok-2": {
     "inputPerMillion": 2.0,
     "outputPerMillion": 10.0
@@ -873,6 +897,16 @@
     "cacheReadPerMillion": 0.2,
     "inputPerMillion": 1.25,
     "outputPerMillion": 2.5
+  },
+  "grok-4.5": {
+    "cacheReadPerMillion": 0.5,
+    "inputPerMillion": 2.0,
+    "outputPerMillion": 6.0
+  },
+  "grok-4.5-latest": {
+    "cacheReadPerMillion": 0.5,
+    "inputPerMillion": 2.0,
+    "outputPerMillion": 6.0
   },
   "grok-beta": {
     "inputPerMillion": 5.0,
