@@ -11,10 +11,11 @@ import VibeUsageWatching
 
 struct VibeUsageApp: App {
     @StateObject private var viewModel = AppViewModel()
+    @StateObject private var updateController = SparkleUpdateController()
 
     var body: some Scene {
         MenuBarExtra {
-            MenuContentView(viewModel: viewModel)
+            MenuContentView(viewModel: viewModel, updateController: updateController)
         } label: {
             if let todaySpendMenuText = viewModel.todaySpendMenuText {
                 Label(todaySpendMenuText, systemImage: "chart.bar.xaxis")
@@ -48,6 +49,7 @@ private let dashboardWindowTitle = VibeUsageStrings.text(zh: "用量控制台", 
 /// menu bar view.
 private struct MenuContentView: View {
     @ObservedObject var viewModel: AppViewModel
+    @ObservedObject var updateController: SparkleUpdateController
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
@@ -76,6 +78,8 @@ private struct MenuContentView: View {
                     NSApp.activate(ignoringOtherApps: true)
                 },
                 onQuit: { NSApp.terminate(nil) },
+                canCheckForUpdates: updateController.canCheckForUpdates,
+                onCheckForUpdates: { updateController.checkForUpdates() },
                 onQuotaConnect: { viewModel.connectQuota($0) },
                 onQuotaDisconnect: { viewModel.disconnectQuota($0) },
                 onQuotaCancelConnect: { viewModel.cancelQuotaConnect($0) }
@@ -165,10 +169,6 @@ final class AppViewModel: ObservableObject {
             self.ingestor = nil
             self.aggregation = nil
             self.startupError = error.localizedDescription
-        }
-
-        Task {
-            await GitHubReleaseUpdater.checkForUpdates()
         }
 
         refreshQuota()

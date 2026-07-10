@@ -24,8 +24,15 @@ echo "==> Assembling ${APP_BUNDLE}"
 rm -rf "${APP_BUNDLE}"
 mkdir -p "${APP_BUNDLE}/Contents/MacOS"
 mkdir -p "${APP_BUNDLE}/Contents/Resources"
+mkdir -p "${APP_BUNDLE}/Contents/Frameworks"
 
 cp "${BUILD_DIR}/${EXECUTABLE_NAME}" "${APP_BUNDLE}/Contents/MacOS/${EXECUTABLE_NAME}"
+
+# SwiftPM's standalone executable rpath points at Contents/MacOS. Add the
+# standard application-bundle framework location before signing the bundle.
+if ! otool -l "${APP_BUNDLE}/Contents/MacOS/${EXECUTABLE_NAME}" | grep -Fq "@loader_path/../Frameworks"; then
+    install_name_tool -add_rpath "@loader_path/../Frameworks" "${APP_BUNDLE}/Contents/MacOS/${EXECUTABLE_NAME}"
+fi
 
 cp "Scripts/package-Info.plist.template" "${APP_BUNDLE}/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString ${VERSION}" "${APP_BUNDLE}/Contents/Info.plist"
@@ -44,6 +51,17 @@ for bundle in "${BUILD_DIR}"/*.bundle; do
     cp -R "$bundle" "${APP_BUNDLE}/Contents/Resources/"
 done
 shopt -u nullglob
+
+# SwiftPM links Sparkle dynamically but does not assemble application bundles.
+# Copy the complete framework (including Updater.app and its XPC services) and
+# preserve its symlinks and executable permissions.
+SPARKLE_FRAMEWORK_PATH="$(find .build/artifacts/sparkle -path '*/macos-*/Sparkle.framework' -type d -print -quit 2>/dev/null || true)"
+if [ -z "${SPARKLE_FRAMEWORK_PATH}" ]; then
+    echo "error: Sparkle.framework was not found in SwiftPM artifacts" >&2
+    exit 1
+fi
+echo "    + Sparkle.framework"
+ditto "${SPARKLE_FRAMEWORK_PATH}" "${APP_BUNDLE}/Contents/Frameworks/Sparkle.framework"
 
 # Compile the app icon asset catalog if one has been populated (see Resources/AppIcon.appiconset).
 if [ -f "Resources/AppIcon.appiconset/Contents.json" ] && command -v actool >/dev/null 2>&1; then
@@ -66,6 +84,7 @@ else
     echo "==> codesign (${SIGN_IDENTITY})"
 fi
 codesign --force --deep --sign "${SIGN_IDENTITY}" "${APP_BUNDLE}"
+codesign --verify --deep --strict "${APP_BUNDLE}"
 
 echo "==> Built ${APP_BUNDLE}"
 echo "    Run with: open ${APP_BUNDLE}"

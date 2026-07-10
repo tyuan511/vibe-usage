@@ -58,6 +58,22 @@ CI on `main` can auto-commit preview changes when the UI changes.
 
 ## Release signing
 
+Sparkle update signing is mandatory for releases. The public key is embedded
+in `Scripts/package-Info.plist.template`; the matching private key must be
+available as the `SPARKLE_PRIVATE_KEY` GitHub Actions secret. The local copy is
+stored in the login Keychain under account `me.tangge.vibeusage` and can be
+exported for an encrypted offline backup with:
+
+```bash
+.build/artifacts/sparkle/Sparkle/bin/generate_keys \
+  --account me.tangge.vibeusage \
+  -x /path/to/secure-backup-key
+```
+
+Never commit the exported private key. Losing this key strands ad-hoc-signed
+installations because there is no Developer ID signature available for key
+rotation.
+
 Release builds accept an optional signing identity:
 
 ```bash

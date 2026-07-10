@@ -11,7 +11,8 @@ let package = Package(
         .executable(name: "VibeUsagePreviewRenderer", targets: ["VibeUsagePreviewRenderer"])
     ],
     dependencies: [
-        .package(url: "https://github.com/groue/GRDB.swift.git", from: "6.29.0")
+        .package(url: "https://github.com/groue/GRDB.swift.git", from: "6.29.0"),
+        .package(url: "https://github.com/sparkle-project/Sparkle", exact: "2.9.4")
     ],
     targets: [
         // MARK: - Core (no internal dependencies; defines the extensibility contract)
@@ -123,7 +124,8 @@ let package = Package(
                 "VibeUsageAggregation",
                 "VibeUsageAdapter",
                 "VibeUsageQuota",
-                "VibeUsageUI"
+                "VibeUsageUI",
+                .product(name: "Sparkle", package: "Sparkle")
             ]
         ),
 

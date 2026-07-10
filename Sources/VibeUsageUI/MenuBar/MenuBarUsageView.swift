@@ -21,6 +21,8 @@ public struct MenuBarUsageView: View {
     let onAgentDisplayCommit: (_ hiddenSourceIDs: Set<AgentSourceID>) -> Void
     let onOpenDashboard: () -> Void
     let onQuit: () -> Void
+    let canCheckForUpdates: Bool
+    let onCheckForUpdates: () -> Void
     let onQuotaConnect: (AgentSourceID) -> Void
     let onQuotaDisconnect: (AgentSourceID) -> Void
     let onQuotaCancelConnect: (AgentSourceID) -> Void
@@ -44,6 +46,8 @@ public struct MenuBarUsageView: View {
         onAgentDisplayCommit: @escaping (Set<AgentSourceID>) -> Void,
         onOpenDashboard: @escaping () -> Void,
         onQuit: @escaping () -> Void,
+        canCheckForUpdates: Bool = false,
+        onCheckForUpdates: @escaping () -> Void = {},
         onQuotaConnect: @escaping (AgentSourceID) -> Void = { _ in },
         onQuotaDisconnect: @escaping (AgentSourceID) -> Void = { _ in },
         onQuotaCancelConnect: @escaping (AgentSourceID) -> Void = { _ in }
@@ -64,6 +68,8 @@ public struct MenuBarUsageView: View {
         self.onAgentDisplayCommit = onAgentDisplayCommit
         self.onOpenDashboard = onOpenDashboard
         self.onQuit = onQuit
+        self.canCheckForUpdates = canCheckForUpdates
+        self.onCheckForUpdates = onCheckForUpdates
         self.onQuotaConnect = onQuotaConnect
         self.onQuotaDisconnect = onQuotaDisconnect
         self.onQuotaCancelConnect = onQuotaCancelConnect
@@ -369,6 +375,15 @@ public struct MenuBarUsageView: View {
                         .controlSize(.small)
                 }
             }
+
+            Divider()
+            Button(action: onCheckForUpdates) {
+                Label(UIStrings.checkForUpdates, systemImage: "arrow.triangle.2.circlepath")
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .buttonStyle(.plain)
+            .controlSize(.small)
+            .disabled(!canCheckForUpdates)
         }
     }
 

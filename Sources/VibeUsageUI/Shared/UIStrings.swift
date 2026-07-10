@@ -8,6 +8,7 @@ enum UIStrings {
 
     static let scanning = text(zh: "扫描中", en: "Scanning")
     static let refresh = text(zh: "刷新", en: "Refresh")
+    static let checkForUpdates = text(zh: "检查更新…", en: "Check for Updates…")
     static let spend = text(zh: "花费", en: "Spend")
     static let cost = text(zh: "费用", en: "Cost")
     static let tokens = text(zh: "Tokens", en: "Tokens")

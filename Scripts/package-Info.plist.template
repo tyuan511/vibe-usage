@@ -30,5 +30,19 @@
     <string>VibeUsage</string>
     <key>NSHighResolutionCapable</key>
     <true/>
+    <key>SUFeedURL</key>
+    <string>https://github.com/tyuan511/vibe-usage/releases/latest/download/appcast.xml</string>
+    <key>SUPublicEDKey</key>
+    <string>gry59asC8wptevxPOknCJmbxfd6hYdaqhG5onLu/mcg=</string>
+    <key>SUEnableAutomaticChecks</key>
+    <true/>
+    <key>SUAllowsAutomaticUpdates</key>
+    <true/>
+    <key>SUAutomaticallyUpdate</key>
+    <false/>
+    <key>SUVerifyUpdateBeforeExtraction</key>
+    <true/>
+    <key>SURequireSignedFeed</key>
+    <true/>
 </dict>
 </plist>
