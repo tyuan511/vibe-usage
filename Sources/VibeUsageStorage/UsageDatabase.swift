@@ -41,6 +41,9 @@ public final class UsageDatabase: Sendable {
         migrator.registerMigration("v1_initial_schema") { db in
             try V1InitialSchema.migrate(db)
         }
+        migrator.registerMigration("v2_reindex_codex_fork_replays") { db in
+            try V2ReindexCodexForkReplays.migrate(db)
+        }
         return migrator
     }
 

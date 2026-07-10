@@ -47,7 +47,10 @@ let package = Package(
         ),
         .testTarget(
             name: "VibeUsageStorageTests",
-            dependencies: ["VibeUsageStorage"]
+            dependencies: [
+                "VibeUsageStorage",
+                .product(name: "GRDB", package: "GRDB.swift")
+            ]
         ),
 
         // MARK: - Watching (FSEvents-based file watching, adapter-agnostic)

@@ -1,4 +1,5 @@
 import Foundation
+import GRDB
 import Testing
 import VibeUsageCore
 @testable import VibeUsageStorage
@@ -354,4 +355,118 @@ private struct TestPricingProvider: PricingProvider {
     #expect(unknownProject.sourceID == .claudeCode)
     #expect(unknownProject.costUSD == 0.5)
     #expect(unknownProject.sessionCount == 1)
+}
+
+@Test func databaseUpgradeReindexesOnlyAffectedCodexFiles() throws {
+    let directory = FileManager.default.temporaryDirectory
+        .appendingPathComponent(UUID().uuidString, isDirectory: true)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let path = directory.appendingPathComponent("usage.sqlite").path
+    let forkFile = directory.appendingPathComponent("fork.jsonl")
+    let duplicateFile = directory.appendingPathComponent("duplicate.jsonl")
+    let legitimateFile = directory.appendingPathComponent("legitimate.jsonl")
+    let regularFile = directory.appendingPathComponent("regular.jsonl")
+    let claudeFile = directory.appendingPathComponent("claude.jsonl")
+    try Data("""
+        {"timestamp":"2026-05-13T09:00:00Z","type":"session_meta","payload":{"forked_from_id":"parent-session"}}
+        """.utf8).write(to: forkFile)
+    try Data("""
+        {"timestamp":"2026-05-13T09:01:00Z","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":100,"cached_input_tokens":50,"output_tokens":10,"reasoning_output_tokens":5,"total_tokens":115}}}}
+        {"timestamp":"2026-05-13T09:01:10Z","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":100,"cached_input_tokens":50,"output_tokens":10,"reasoning_output_tokens":5,"total_tokens":115}}}}
+        """.utf8).write(to: duplicateFile)
+    try Data("""
+        {"timestamp":"2026-05-13T09:01:00Z","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":100,"cached_input_tokens":50,"output_tokens":10,"reasoning_output_tokens":5,"total_tokens":115}}}}
+        {"timestamp":"2026-05-13T09:01:10Z","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":200,"cached_input_tokens":100,"output_tokens":20,"reasoning_output_tokens":10,"total_tokens":230}}}}
+        """.utf8).write(to: legitimateFile)
+    try Data("{}\n".utf8).write(to: regularFile)
+    try Data("{}\n".utf8).write(to: claudeFile)
+
+    do {
+        let legacyQueue = try DatabaseQueue(path: path)
+        var legacyMigrator = DatabaseMigrator()
+        legacyMigrator.registerMigration("v1_initial_schema") { db in
+            try V1InitialSchema.migrate(db)
+        }
+        try legacyMigrator.migrate(legacyQueue)
+        try legacyQueue.write { db in
+            try db.execute(sql: """
+                INSERT INTO agent_source (id, display_name, first_seen_at)
+                VALUES ('codex-cli', 'Codex CLI', '2026-05-13 09:00:00'),
+                       ('claude-code', 'Claude Code', '2026-05-13 09:00:00')
+                """)
+            let eventSQL = """
+                INSERT INTO usage_event (
+                    source_id, dedup_key, timestamp_utc, session_id,
+                    model_raw, model_family, input_tokens, output_tokens,
+                    cost_usd, cost_is_estimated, source_file_path,
+                    source_file_line, created_at
+                ) VALUES (?, ?, '2026-05-13 09:00:00', ?, ?, ?, ?, ?, ?, 0, ?, ?, '2026-05-13 09:00:00')
+                """
+            try db.execute(
+                sql: eventSQL,
+                arguments: ["codex-cli", "fork-replay", "fork", "gpt-5.6-sol", "gpt-5.6-sol", 100, 10, 1.5, forkFile.path, 1]
+            )
+            try db.execute(
+                sql: eventSQL,
+                arguments: ["codex-cli", "duplicate-1", "duplicate", "gpt-5.6-sol", "gpt-5.6-sol", 200, 20, 2.5, duplicateFile.path, 1]
+            )
+            try db.execute(
+                sql: eventSQL,
+                arguments: ["codex-cli", "duplicate-2", "duplicate", "gpt-5.6-sol", "gpt-5.6-sol", 200, 20, 2.5, duplicateFile.path, 2]
+            )
+            try db.execute(
+                sql: eventSQL,
+                arguments: ["codex-cli", "legitimate-1", "legitimate", "gpt-5.6-sol", "gpt-5.6-sol", 250, 25, 2.75, legitimateFile.path, 1]
+            )
+            try db.execute(
+                sql: eventSQL,
+                arguments: ["codex-cli", "legitimate-2", "legitimate", "gpt-5.6-sol", "gpt-5.6-sol", 250, 25, 2.75, legitimateFile.path, 2]
+            )
+            try db.execute(
+                sql: eventSQL,
+                arguments: ["codex-cli", "regular-kept", "regular", "gpt-5.6-sol", "gpt-5.6-sol", 300, 30, 3.5, regularFile.path, 1]
+            )
+            try db.execute(
+                sql: eventSQL,
+                arguments: ["claude-code", "claude-kept", "claude", "claude-sonnet-4", "claude-sonnet-4", 400, 40, 4.5, claudeFile.path, 1]
+            )
+
+            let stateSQL = """
+                INSERT INTO file_parse_state (file_path, source_id, updated_at)
+                VALUES (?, ?, '2026-05-13 09:00:00')
+                """
+            try db.execute(sql: stateSQL, arguments: [forkFile.path, "codex-cli"])
+            try db.execute(sql: stateSQL, arguments: [duplicateFile.path, "codex-cli"])
+            try db.execute(sql: stateSQL, arguments: [legitimateFile.path, "codex-cli"])
+            try db.execute(sql: stateSQL, arguments: [regularFile.path, "codex-cli"])
+            try db.execute(sql: stateSQL, arguments: [claudeFile.path, "claude-code"])
+        }
+    }
+
+    let upgraded = try UsageDatabase(path: path)
+    try upgraded.dbQueue.read { db in
+        let eventCount: (String) throws -> Int? = { file in
+            try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM usage_event WHERE source_file_path = ?", arguments: [file])
+        }
+        let stateCount: (String) throws -> Int? = { file in
+            try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM file_parse_state WHERE file_path = ?", arguments: [file])
+        }
+        let migration = try String.fetchOne(
+            db,
+            sql: "SELECT identifier FROM grdb_migrations WHERE identifier = 'v2_reindex_codex_fork_replays'"
+        )
+
+        #expect(try eventCount(forkFile.path) == 0)
+        #expect(try stateCount(forkFile.path) == 0)
+        #expect(try eventCount(duplicateFile.path) == 1)
+        #expect(try stateCount(duplicateFile.path) == 1)
+        #expect(try eventCount(legitimateFile.path) == 2)
+        #expect(try stateCount(legitimateFile.path) == 1)
+        #expect(try eventCount(regularFile.path) == 1)
+        #expect(try stateCount(regularFile.path) == 1)
+        #expect(try eventCount(claudeFile.path) == 1)
+        #expect(try stateCount(claudeFile.path) == 1)
+        #expect(migration == "v2_reindex_codex_fork_replays")
+    }
 }

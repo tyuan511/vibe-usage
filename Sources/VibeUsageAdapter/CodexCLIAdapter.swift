@@ -65,6 +65,13 @@ public struct CodexCLIAdapter: UsageSourceAdapter {
         }
 
         var state = checkpoint?.adapterState.flatMap { try? JSONDecoder().decode(CodexParseState.self, from: $0) } ?? CodexParseState()
+        let replayMatch: ForkReplayMatch
+        if state.forkReplayProcessed == true {
+            replayMatch = .complete
+        } else {
+            replayMatch = Self.forkReplayMatch(in: data, fileAt: path)
+            state.forkReplayProcessed = replayMatch.isComplete
+        }
         var offset = start
         var lineIndex = checkpoint?.lineIndex ?? 0
         var events: [UsageEvent] = []
@@ -89,6 +96,7 @@ public struct CodexCLIAdapter: UsageSourceAdapter {
             }
 
             guard let parsed = Self.tokenUsageEvent(from: object, state: &state) else { continue }
+            guard !replayMatch.lineIndexes.contains(lineIndex + 1) else { continue }
             guard let timestamp = Date.vibeUsageParse(parsed.timestamp) else { continue }
             guard let rawModel = parsed.model.nonEmpty else { continue }
 
@@ -152,6 +160,9 @@ public struct CodexCLIAdapter: UsageSourceAdapter {
         guard let timestamp = codexString(object["timestamp"]) else { return nil }
         let info = payload["info"] as? [String: Any] ?? [:]
         let total = parseUsage(from: info["total_token_usage"])
+        if let total, total == state.previousTotals {
+            return nil
+        }
         let rawUsage = parseUsage(from: info["last_token_usage"]) ?? total.map { totalUsage in
             totalUsage.subtracting(state.previousTotals)
         }
@@ -163,6 +174,88 @@ public struct CodexCLIAdapter: UsageSourceAdapter {
         let parsedModel = model(from: payload) ?? model(from: info)
         let resolved = resolveModel(parsedModel: parsedModel, timestamp: timestamp, state: &state)
         return ParsedCodexEvent(timestamp: timestamp, model: resolved.model, usage: rawUsage, isFallbackModel: resolved.isFallback)
+    }
+
+    private static func forkReplayMatch(in childData: Data, fileAt childPath: String) -> ForkReplayMatch {
+        let childObjects = jsonObjectLines(in: childData)
+        guard let first = childObjects.first?.object,
+              codexString(first["type"]) == "session_meta",
+              let payload = first["payload"] as? [String: Any],
+              let parentID = codexString(payload["forked_from_id"])?.nonEmpty,
+              let forkTimestamp = codexString(first["timestamp"]),
+              let forkDate = Date.vibeUsageParse(forkTimestamp) else {
+            return .complete
+        }
+        guard let parentPath = parentSessionPath(parentID: parentID, childPath: childPath),
+              let parentData = try? Data(contentsOf: URL(fileURLWithPath: parentPath)) else {
+            return .pending
+        }
+
+        let parentSnapshots = jsonObjectLines(in: parentData).compactMap { line -> CodexUsageSnapshot? in
+            let object = line.object
+            guard let timestamp = codexString(object["timestamp"]),
+                  let date = Date.vibeUsageParse(timestamp),
+                  date <= forkDate else {
+                return nil
+            }
+            return usageSnapshot(from: object)
+        }
+        guard !parentSnapshots.isEmpty else { return .complete }
+
+        var replayLines = Set<Int>()
+        var parentIndex = 0
+        for line in childObjects {
+            let object = line.object
+            guard let snapshot = usageSnapshot(from: object) else { continue }
+            guard parentIndex < parentSnapshots.count else {
+                return ForkReplayMatch(lineIndexes: replayLines, isComplete: true)
+            }
+            guard snapshot == parentSnapshots[parentIndex] else {
+                return ForkReplayMatch(lineIndexes: replayLines, isComplete: true)
+            }
+            replayLines.insert(line.number)
+            parentIndex += 1
+        }
+        return ForkReplayMatch(
+            lineIndexes: replayLines,
+            isComplete: parentIndex == parentSnapshots.count
+        )
+    }
+
+    private static func usageSnapshot(from object: [String: Any]) -> CodexUsageSnapshot? {
+        guard codexString(object["type"]) == "event_msg",
+              let payload = object["payload"] as? [String: Any],
+              codexString(payload["type"]) == "token_count",
+              let info = payload["info"] as? [String: Any] else {
+            return nil
+        }
+        let snapshot = CodexUsageSnapshot(
+            total: parseUsage(from: info["total_token_usage"]),
+            last: parseUsage(from: info["last_token_usage"])
+        )
+        return snapshot.total == nil && snapshot.last == nil ? nil : snapshot
+    }
+
+    private static func parentSessionPath(parentID: String, childPath: String) -> String? {
+        var container = URL(fileURLWithPath: childPath).deletingLastPathComponent()
+        while container.path != "/",
+              container.lastPathComponent != "sessions",
+              container.lastPathComponent != "archived_sessions" {
+            container.deleteLastPathComponent()
+        }
+        guard container.path != "/" else { return nil }
+
+        let home = container.deletingLastPathComponent()
+        let expectedSuffix = "-\(parentID).jsonl"
+        for directoryName in ["sessions", "archived_sessions"] {
+            let directory = home.appendingPathComponent(directoryName, isDirectory: true)
+            guard directory.isDirectory else { continue }
+            if let match = collectJSONLFiles(under: directory)
+                .first(where: { $0.lastPathComponent.hasSuffix(expectedSuffix) }) {
+                return match.path
+            }
+        }
+        return nil
     }
 
     private static func headlessTokenUsageEvent(from object: [String: Any], state: inout CodexParseState) -> ParsedCodexEvent? {
@@ -257,6 +350,20 @@ private struct CodexParseState: Codable {
     var previousTotals: CodexRawUsage?
     var currentModel: String?
     var currentModelIsFallback: Bool = false
+    var forkReplayProcessed: Bool?
+}
+
+private struct CodexUsageSnapshot: Equatable {
+    let total: CodexRawUsage?
+    let last: CodexRawUsage?
+}
+
+private struct ForkReplayMatch {
+    let lineIndexes: Set<Int>
+    let isComplete: Bool
+
+    static let complete = ForkReplayMatch(lineIndexes: [], isComplete: true)
+    static let pending = ForkReplayMatch(lineIndexes: [], isComplete: false)
 }
 
 private struct CodexRawUsage: Codable, Equatable {
@@ -301,6 +408,21 @@ private func collectJSONLFiles(under directory: URL) -> [URL] {
         guard let url = item as? URL, url.pathExtension == "jsonl" else { return nil }
         return url
     }
+}
+
+private func jsonObjectLines(in data: Data) -> [(number: Int, object: [String: Any])] {
+    var objects: [(number: Int, object: [String: Any])] = []
+    var offset = 0
+    var lineNumber = 1
+    while offset < data.count {
+        let newline = data[offset...].firstIndex(of: 0x0A) ?? data.count
+        if let object = try? JSONSerialization.jsonObject(with: data[offset..<newline]) as? [String: Any] {
+            objects.append((number: lineNumber, object: object))
+        }
+        offset = newline < data.count ? newline + 1 : data.count
+        lineNumber += 1
+    }
+    return objects
 }
 
 private func parseUsage(from value: Any?) -> CodexRawUsage? {
