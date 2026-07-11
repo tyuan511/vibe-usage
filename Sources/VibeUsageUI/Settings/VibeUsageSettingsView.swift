@@ -4,8 +4,7 @@ import VibeUsageCore
 public struct VibeUsageSettingsView: View {
     let configurableAgentSources: [AgentSourceDescriptor]
     @Binding var menuBarMetricMode: MenuBarMetricMode
-    @Binding var hiddenMenuBarMetricSourceIDs: Set<AgentSourceID>
-    @Binding var hiddenDropdownSourceIDs: Set<AgentSourceID>
+    @Binding var hiddenAgentSourceIDs: Set<AgentSourceID>
     @Binding var enablesLimitMonitoring: Bool
     @Binding var hiddenQuotaSourceIDs: Set<AgentSourceID>
     let canCheckForUpdates: Bool
@@ -14,8 +13,7 @@ public struct VibeUsageSettingsView: View {
     public init(
         configurableAgentSources: [AgentSourceDescriptor],
         menuBarMetricMode: Binding<MenuBarMetricMode>,
-        hiddenMenuBarMetricSourceIDs: Binding<Set<AgentSourceID>>,
-        hiddenDropdownSourceIDs: Binding<Set<AgentSourceID>>,
+        hiddenAgentSourceIDs: Binding<Set<AgentSourceID>>,
         enablesLimitMonitoring: Binding<Bool>,
         hiddenQuotaSourceIDs: Binding<Set<AgentSourceID>>,
         canCheckForUpdates: Bool,
@@ -23,8 +21,7 @@ public struct VibeUsageSettingsView: View {
     ) {
         self.configurableAgentSources = configurableAgentSources
         self._menuBarMetricMode = menuBarMetricMode
-        self._hiddenMenuBarMetricSourceIDs = hiddenMenuBarMetricSourceIDs
-        self._hiddenDropdownSourceIDs = hiddenDropdownSourceIDs
+        self._hiddenAgentSourceIDs = hiddenAgentSourceIDs
         self._enablesLimitMonitoring = enablesLimitMonitoring
         self._hiddenQuotaSourceIDs = hiddenQuotaSourceIDs
         self.canCheckForUpdates = canCheckForUpdates
@@ -43,33 +40,26 @@ public struct VibeUsageSettingsView: View {
                     Text(UIStrings.tokens).tag(MenuBarMetricMode.tokens)
                 }
                 .pickerStyle(.segmented)
-
-                if menuBarMetricMode != .hidden {
-                    agentSelection(
-                        title: UIStrings.text(zh: "计入菜单栏统计", en: "Included in menu bar total"),
-                        hiddenSourceIDs: $hiddenMenuBarMetricSourceIDs
-                    )
-                }
             } header: {
                 Text(UIStrings.text(zh: "菜单栏", en: "Menu Bar"))
             } footer: {
                 Text(UIStrings.text(
-                    zh: "金额和 Token 始终统计今天；新发现的 Agent 默认自动加入。",
-                    en: "Spend and tokens always cover today. Newly discovered agents are included automatically."
+                    zh: "金额和 Token 始终统计今天，并使用下方的 Agent 统计范围。",
+                    en: "Spend and tokens always cover today and use the agent selection below."
                 ))
             }
 
             Section {
                 agentSelection(
-                    title: UIStrings.text(zh: "下拉统计 Agent", en: "Agents included in the popover"),
-                    hiddenSourceIDs: $hiddenDropdownSourceIDs
+                    title: UIStrings.text(zh: "统计 Agent", en: "Included agents"),
+                    hiddenSourceIDs: $hiddenAgentSourceIDs
                 )
             } header: {
-                Text(UIStrings.text(zh: "下拉显示", en: "Popover"))
+                Text(UIStrings.text(zh: "Agent 统计", en: "Agent Usage"))
             } footer: {
                 Text(UIStrings.text(
-                    zh: "该选择会同时影响下拉中的总金额、Token、热力图、Agent 和模型。",
-                    en: "This selection affects popover totals, tokens, activity, agents, and models."
+                    zh: "该选择同时影响菜单栏指标，以及下拉中的总金额、Token、热力图、Agent 和模型。新发现的 Agent 默认自动加入。",
+                    en: "This selection affects the menu bar metric and all popover usage. Newly discovered agents are included automatically."
                 ))
             }
 

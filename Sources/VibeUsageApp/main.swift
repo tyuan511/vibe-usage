@@ -29,8 +29,7 @@ struct VibeUsageApp: App {
             VibeUsageSettingsView(
                 configurableAgentSources: viewModel.configurableAgentSources,
                 menuBarMetricMode: $viewModel.menuBarMetricMode,
-                hiddenMenuBarMetricSourceIDs: $viewModel.hiddenMenuBarMetricSourceIDs,
-                hiddenDropdownSourceIDs: $viewModel.hiddenAgentSourceIDs,
+                hiddenAgentSourceIDs: $viewModel.hiddenAgentSourceIDs,
                 enablesLimitMonitoring: $viewModel.enablesLimitMonitoring,
                 hiddenQuotaSourceIDs: $viewModel.hiddenQuotaSourceIDs,
                 canCheckForUpdates: updateController.canCheckForUpdates,
@@ -90,18 +89,12 @@ final class AppViewModel: ObservableObject {
             Self.saveSourceIDs(hiddenAgentSourceIDs, key: Self.hiddenAgentSourceIDsKey)
             guard !isInitializing else { return }
             applyFilters()
+            reloadMenuBarMetric()
         }
     }
     @Published var menuBarMetricMode: MenuBarMetricMode {
         didSet {
             UserDefaults.standard.set(menuBarMetricMode.rawValue, forKey: Self.menuBarMetricModeKey)
-            guard !isInitializing else { return }
-            reloadMenuBarMetric()
-        }
-    }
-    @Published var hiddenMenuBarMetricSourceIDs: Set<AgentSourceID> {
-        didSet {
-            Self.saveSourceIDs(hiddenMenuBarMetricSourceIDs, key: Self.hiddenMenuBarMetricSourceIDsKey)
             guard !isInitializing else { return }
             reloadMenuBarMetric()
         }
@@ -144,7 +137,6 @@ final class AppViewModel: ObservableObject {
 
         self.allSourceDescriptors = registry.descriptors
         self.hiddenAgentSourceIDs = Self.loadHiddenAgentSourceIDs()
-        self.hiddenMenuBarMetricSourceIDs = Self.loadSourceIDs(key: Self.hiddenMenuBarMetricSourceIDsKey)
         self.hiddenQuotaSourceIDs = Self.loadHiddenQuotaSourceIDs()
         self.menuBarMetricMode = Self.loadMenuBarMetricMode()
         self.enablesLimitMonitoring = Self.loadEnablesLimitMonitoring()
@@ -349,7 +341,7 @@ final class AppViewModel: ObservableObject {
             let todaySnapshot = try aggregation.dashboardSnapshot(
                 visibleSourceFilter: Self.visibleSourceIDs(
                     discovered: locallyDiscoveredSourceIDs,
-                    hidden: hiddenMenuBarMetricSourceIDs
+                    hidden: hiddenAgentSourceIDs
                 ),
                 dateRange: .today
             )
@@ -380,7 +372,6 @@ final class AppViewModel: ObservableObject {
     }
 
     private static let hiddenAgentSourceIDsKey = "hiddenAgentSourceIDs"
-    private static let hiddenMenuBarMetricSourceIDsKey = "hiddenMenuBarMetricSourceIDs"
     private static let hiddenQuotaSourceIDsKey = "hiddenQuotaSourceIDs"
     private static let menuBarMetricModeKey = "menuBarMetricMode"
     private static let showsSpendInMenuBarKey = "showsSpendInMenuBar"
