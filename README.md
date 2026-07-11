@@ -196,6 +196,8 @@ Scripts/build-app.sh release
 open .build/VibeUsage.app
 ```
 
+未显式传入 `VERSION` 时，本地构建会使用当前提交可达的最新 `v*` Git tag；发布工作流仍会显式注入 tag 版本。
+
 打包 DMG：
 
 ```bash

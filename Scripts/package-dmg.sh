@@ -10,12 +10,19 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
 APP_NAME="VibeUsage"
-VERSION="${VERSION:-0.1.0}"
+VERSION="${VERSION:-}"
+BUILD_NUMBER="${BUILD_NUMBER:-1}"
 DMG_STAGING_DIR=".build/dmg/${APP_NAME}"
-DMG_PATH=".build/${APP_NAME}-${VERSION}.dmg"
 
 echo "==> Building ${APP_NAME}.app"
-Scripts/build-app.sh "${CONFIG}"
+VERSION="${VERSION}" BUILD_NUMBER="${BUILD_NUMBER}" Scripts/build-app.sh "${CONFIG}"
+
+# Keep the DMG name and volume version aligned with the app bundle. When no
+# explicit VERSION was supplied, build-app.sh resolves the latest Git tag.
+if [ -z "${VERSION}" ]; then
+    VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' ".build/${APP_NAME}.app/Contents/Info.plist")"
+fi
+DMG_PATH=".build/${APP_NAME}-${VERSION}.dmg"
 
 echo "==> Staging DMG"
 rm -rf "${DMG_STAGING_DIR}"

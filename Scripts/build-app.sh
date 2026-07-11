@@ -13,6 +13,11 @@ APP_NAME="VibeUsage"
 EXECUTABLE_NAME="VibeUsageApp"
 BUILD_DIR=".build/${CONFIG}"
 APP_BUNDLE=".build/${APP_NAME}.app"
+VERSION="${VERSION:-}"
+if [ -z "${VERSION}" ]; then
+    LATEST_TAG="$(git describe --tags --abbrev=0 --match 'v[0-9]*' 2>/dev/null || true)"
+    VERSION="${LATEST_TAG#v}"
+fi
 VERSION="${VERSION:-0.1.0}"
 BUILD_NUMBER="${BUILD_NUMBER:-1}"
 SIGN_IDENTITY="${SIGN_IDENTITY:--}"
