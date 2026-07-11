@@ -1,4 +1,39 @@
 {
+  "MiniMax-M2": {
+    "cacheReadPerMillion": 0.03,
+    "cacheWritePerMillion": 0.375,
+    "inputPerMillion": 0.3,
+    "outputPerMillion": 1.2
+  },
+  "MiniMax-M2.1": {
+    "cacheReadPerMillion": 0.03,
+    "cacheWritePerMillion": 0.375,
+    "inputPerMillion": 0.3,
+    "outputPerMillion": 1.2
+  },
+  "MiniMax-M2.1-lightning": {
+    "cacheReadPerMillion": 0.03,
+    "cacheWritePerMillion": 0.375,
+    "inputPerMillion": 0.3,
+    "outputPerMillion": 2.4
+  },
+  "MiniMax-M2.5": {
+    "cacheReadPerMillion": 0.03,
+    "cacheWritePerMillion": 0.375,
+    "inputPerMillion": 0.3,
+    "outputPerMillion": 1.2
+  },
+  "MiniMax-M2.5-lightning": {
+    "cacheReadPerMillion": 0.03,
+    "cacheWritePerMillion": 0.375,
+    "inputPerMillion": 0.3,
+    "outputPerMillion": 2.4
+  },
+  "MiniMax-M3": {
+    "cacheReadPerMillion": 0.06,
+    "inputPerMillion": 0.3,
+    "outputPerMillion": 1.2
+  },
   "claude-3-7-sonnet": {
     "cacheReadPerMillion": 0.3,
     "cacheWritePerMillion": 3.75,
@@ -338,6 +373,58 @@
     "cacheReadPerMillion": 0,
     "inputPerMillion": 0.3,
     "outputPerMillion": 2.5
+  },
+  "glm-4-32b-0414-128k": {
+    "inputPerMillion": 0.1,
+    "outputPerMillion": 0.1
+  },
+  "glm-4.5": {
+    "inputPerMillion": 0.6,
+    "outputPerMillion": 2.2
+  },
+  "glm-4.5-air": {
+    "inputPerMillion": 0.2,
+    "outputPerMillion": 1.1
+  },
+  "glm-4.5-airx": {
+    "inputPerMillion": 1.1,
+    "outputPerMillion": 4.5
+  },
+  "glm-4.5-flash": {
+    "inputPerMillion": 0,
+    "outputPerMillion": 0
+  },
+  "glm-4.5-x": {
+    "inputPerMillion": 2.2,
+    "outputPerMillion": 8.9
+  },
+  "glm-4.5v": {
+    "inputPerMillion": 0.6,
+    "outputPerMillion": 1.8
+  },
+  "glm-4.6": {
+    "cacheReadPerMillion": 0.11,
+    "cacheWritePerMillion": 0,
+    "inputPerMillion": 0.6,
+    "outputPerMillion": 2.2
+  },
+  "glm-4.7": {
+    "cacheReadPerMillion": 0.11,
+    "cacheWritePerMillion": 0,
+    "inputPerMillion": 0.6,
+    "outputPerMillion": 2.2
+  },
+  "glm-5": {
+    "cacheReadPerMillion": 0.2,
+    "cacheWritePerMillion": 0,
+    "inputPerMillion": 1.0,
+    "outputPerMillion": 3.2
+  },
+  "glm-5-code": {
+    "cacheReadPerMillion": 0.3,
+    "cacheWritePerMillion": 0,
+    "inputPerMillion": 1.2,
+    "outputPerMillion": 5.0
   },
   "gpt-4": {
     "inputPerMillion": 30.0,

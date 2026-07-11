@@ -6,7 +6,8 @@ import VibeUsageCore
 @MainActor
 @Suite struct QuotaServiceTests {
     @Test func snapshotReturnsAllDisabledWhenSettingIsOff() async {
-        let manager = QuotaConnectionManager(store: InMemoryConnectedAccountStore(), claudeCredentialReader: FakeClaudeCredentialReader(credential: nil))
+        let store = CountingConnectedAccountStore()
+        let manager = QuotaConnectionManager(store: store, claudeCredentialReader: FakeClaudeCredentialReader(credential: nil))
         let service = QuotaService(connectionManager: manager, isEnabled: { false })
         let snapshot = await service.snapshot()
 
@@ -14,6 +15,8 @@ import VibeUsageCore
         for source in snapshot.sources {
             #expect(source.state == .disabled)
         }
+        #expect(store.loadAllCount == 0)
+        #expect(store.totalLoadCount == 0)
     }
 
     @Test func snapshotReturnsNotConnectedWhenEnabledButNoAccountsConnected() async {

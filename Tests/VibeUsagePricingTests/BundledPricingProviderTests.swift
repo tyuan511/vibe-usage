@@ -4,7 +4,7 @@ import VibeUsageCore
 @testable import VibeUsagePricing
 
 @Test func loadsRealBundledSnapshotAndResolvesKnownFamily() {
-    let provider = BundledPricingProvider()
+    let provider = BundledPricingProvider(localSnapshotURL: nil)
     let rate = provider.rate(forModelFamily: "claude-sonnet-4")
     #expect(rate != nil)
     #expect((rate?.inputPerMillion ?? 0) > 0)
@@ -12,14 +12,22 @@ import VibeUsageCore
 }
 
 @Test func loadsGeminiQwenAndKimiFamiliesFromBundledSnapshot() {
-    let provider = BundledPricingProvider()
+    let provider = BundledPricingProvider(localSnapshotURL: nil)
     #expect(provider.rate(forModelFamily: "gemini-3-flash-preview") != nil)
     #expect(provider.rate(forModelFamily: "qwen3-coder-plus") != nil)
     #expect(provider.rate(forModelFamily: "kimi-k2") != nil)
 }
 
+@Test func loadsCommonDirectProviderFamiliesFromBundledSnapshot() {
+    let provider = BundledPricingProvider(localSnapshotURL: nil)
+    #expect(provider.rate(forModelFamily: "deepseek-v3.2") != nil)
+    #expect(provider.rate(forModelFamily: "glm-5") != nil)
+    #expect(provider.rate(forModelFamily: "minimax-m2.5") != nil)
+    #expect(provider.rate(forModelFamily: "grok-4") != nil)
+}
+
 @Test func loadsGPT56FamilyWithCurrentStandardPricing() {
-    let provider = BundledPricingProvider()
+    let provider = BundledPricingProvider(localSnapshotURL: nil)
     let expectedRates: [String: ModelPricingRate] = [
         "gpt-5.6": ModelPricingRate(
             inputPerMillion: 5,
@@ -53,7 +61,7 @@ import VibeUsageCore
 }
 
 @Test func resolvesStoredAliasesForHistoricalRepricing() throws {
-    let provider = BundledPricingProvider()
+    let provider = BundledPricingProvider(localSnapshotURL: nil)
     #expect(
         provider.rate(forModelFamily: "gemini-3-pro-high")
             == provider.rate(forModelFamily: "gemini-3-pro-preview")

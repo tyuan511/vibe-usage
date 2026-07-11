@@ -65,6 +65,10 @@ def is_relevant(key: str, entry: dict) -> bool:
         return True
     if provider == "xai" and "grok" in bare:
         return True
+    if provider in {"zai", "zhipu", "zhipuai"} and "glm" in bare:
+        return True
+    if provider == "minimax" and "minimax" in bare:
+        return True
     return False
 
 

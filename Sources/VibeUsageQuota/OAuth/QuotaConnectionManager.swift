@@ -41,9 +41,9 @@ public final class QuotaConnectionManager {
     /// retrying the refresh every call.
     private var flaggedUnauthorized: Set<AgentSourceID> = []
 
-    /// In-memory mirror of ``ConnectedAccountStoring`` so quota polling
-    /// (menu-bar open, timer, manual refresh) doesn't hit the keychain on
-    /// every `isConnected` / `validAccessToken` / `subscriptionTier` call.
+    /// Lazily populated in-memory mirror of ``ConnectedAccountStoring`` so
+    /// disabled quota monitoring never touches the keychain, while enabled
+    /// polling still avoids repeated reads.
     private var accountCache: [AgentSourceID: ConnectedAccount] = [:]
     private var accountCachePrimed: Set<AgentSourceID> = []
 
@@ -63,7 +63,6 @@ public final class QuotaConnectionManager {
         self.loopbackServerFactory = loopbackServerFactory
         self.browserOpener = browserOpener
         self.now = now
-        primeAccountCache()
     }
 
     public func isConnected(_ provider: AgentSourceID) -> Bool {
@@ -185,16 +184,6 @@ public final class QuotaConnectionManager {
         flaggedUnauthorized.insert(provider)
         store.clear(provider)
         clearCachedAccount(for: provider)
-    }
-
-    private func primeAccountCache() {
-        let all = store.loadAllAccounts()
-        for provider in [AgentSourceID.claudeQuota, .codexQuota] {
-            accountCachePrimed.insert(provider)
-            if let account = all[provider] {
-                accountCache[provider] = account
-            }
-        }
     }
 
     private func cachedAccount(for provider: AgentSourceID) -> ConnectedAccount? {

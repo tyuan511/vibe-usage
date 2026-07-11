@@ -1,31 +1,39 @@
 import Foundation
 import VibeUsageAggregation
 
-public enum MenuBarMetricMode: String, CaseIterable, Identifiable, Sendable {
+public enum MenuBarMetricMode: String, Sendable {
     case hidden
-    case spend
-    case tokens
-
-    public var id: String { rawValue }
+    case usage
 
     public static func resolve(storedRawValue: String?, legacyShowsSpend: Bool?) -> Self {
-        if let storedRawValue, let stored = Self(rawValue: storedRawValue) {
-            return stored
+        switch storedRawValue {
+        case Self.hidden.rawValue:
+            return .hidden
+        case Self.usage.rawValue, "spend", "tokens":
+            return .usage
+        default:
+            return legacyShowsSpend == false ? .hidden : .usage
         }
-        return legacyShowsSpend == false ? .hidden : .spend
+    }
+}
+
+public struct MenuBarMetricValues: Equatable, Sendable {
+    public let tokens: String
+    public let spend: String
+
+    public init(tokens: String, spend: String) {
+        self.tokens = tokens
+        self.spend = spend
     }
 }
 
 public enum MenuBarMetricFormatter {
-    public static func text(for mode: MenuBarMetricMode, totals: UsageTotals) -> String? {
-        switch mode {
-        case .hidden:
-            return nil
-        case .spend:
-            return spendText(totals.costUSD)
-        case .tokens:
-            return totals.tokens.total == 0 ? "0K" : totals.tokens.total.compactString
-        }
+    public static func values(for mode: MenuBarMetricMode, totals: UsageTotals) -> MenuBarMetricValues? {
+        guard mode == .usage else { return nil }
+        return MenuBarMetricValues(
+            tokens: totals.tokens.total == 0 ? "0K" : totals.tokens.total.compactString,
+            spend: spendText(totals.costUSD)
+        )
     }
 
     private static func spendText(_ amount: Decimal) -> String {

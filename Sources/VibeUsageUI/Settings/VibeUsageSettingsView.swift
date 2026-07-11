@@ -8,6 +8,10 @@ public struct VibeUsageSettingsView: View {
     @Binding var hiddenAgentSourceIDs: Set<AgentSourceID>
     @Binding var enablesLimitMonitoring: Bool
     @Binding var hiddenQuotaSourceIDs: Set<AgentSourceID>
+    let pricingLastUpdatedAt: Date?
+    let pricingUpdateError: String?
+    let isUpdatingPricing: Bool
+    let onUpdatePricing: () -> Void
     let loginItemRequiresApproval: Bool
     let loginItemError: String?
     let onOpenLoginItemSettings: () -> Void
@@ -22,6 +26,10 @@ public struct VibeUsageSettingsView: View {
         hiddenAgentSourceIDs: Binding<Set<AgentSourceID>>,
         enablesLimitMonitoring: Binding<Bool>,
         hiddenQuotaSourceIDs: Binding<Set<AgentSourceID>>,
+        pricingLastUpdatedAt: Date?,
+        pricingUpdateError: String?,
+        isUpdatingPricing: Bool,
+        onUpdatePricing: @escaping () -> Void,
         loginItemRequiresApproval: Bool,
         loginItemError: String?,
         onOpenLoginItemSettings: @escaping () -> Void,
@@ -35,6 +43,10 @@ public struct VibeUsageSettingsView: View {
         self._hiddenAgentSourceIDs = hiddenAgentSourceIDs
         self._enablesLimitMonitoring = enablesLimitMonitoring
         self._hiddenQuotaSourceIDs = hiddenQuotaSourceIDs
+        self.pricingLastUpdatedAt = pricingLastUpdatedAt
+        self.pricingUpdateError = pricingUpdateError
+        self.isUpdatingPricing = isUpdatingPricing
+        self.onUpdatePricing = onUpdatePricing
         self.loginItemRequiresApproval = loginItemRequiresApproval
         self.loginItemError = loginItemError
         self.onOpenLoginItemSettings = onOpenLoginItemSettings
@@ -62,77 +74,107 @@ public struct VibeUsageSettingsView: View {
                         )
                     }
                 }
+
+                Toggle(
+                    UIStrings.text(zh: "菜单栏显示用量", en: "Show usage in menu bar"),
+                    isOn: Binding(
+                        get: { menuBarMetricMode == .usage },
+                        set: { menuBarMetricMode = $0 ? .usage : .hidden }
+                    )
+                )
             } header: {
                 Text(UIStrings.text(zh: "通用", en: "General"))
             }
 
             Section {
-                Picker(
-                    UIStrings.text(zh: "指标", en: "Metric"),
-                    selection: $menuBarMetricMode
-                ) {
-                    Text(UIStrings.text(zh: "不显示", en: "Hidden")).tag(MenuBarMetricMode.hidden)
-                    Text(UIStrings.text(zh: "金额", en: "Spend")).tag(MenuBarMetricMode.spend)
-                    Text(UIStrings.tokens).tag(MenuBarMetricMode.tokens)
+                if configurableAgentSources.isEmpty {
+                    Text(UIStrings.text(zh: "尚未发现本地 Agent", en: "No local agents discovered"))
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(configurableAgentSources) { descriptor in
+                        Toggle(
+                            isOn: visibilityBinding(
+                                for: descriptor.id,
+                                hiddenSourceIDs: $hiddenAgentSourceIDs
+                            )
+                        ) {
+                            AgentSettingLabel(descriptor: descriptor)
+                        }
+                        .toggleStyle(.checkbox)
+                    }
                 }
-                .pickerStyle(.segmented)
             } header: {
-                Text(UIStrings.text(zh: "菜单栏", en: "Menu Bar"))
-            } footer: {
-                Text(UIStrings.text(
-                    zh: "金额和 Token 始终统计今天，并使用下方的 Agent 统计范围。",
-                    en: "Spend and tokens always cover today and use the agent selection below."
-                ))
-            }
-
-            Section {
-                agentSelection(
-                    title: UIStrings.text(zh: "统计 Agent", en: "Included agents"),
-                    hiddenSourceIDs: $hiddenAgentSourceIDs
-                )
-            } header: {
-                Text(UIStrings.text(zh: "Agent 统计", en: "Agent Usage"))
-            } footer: {
-                Text(UIStrings.text(
-                    zh: "该选择同时影响菜单栏指标，以及下拉中的总金额、Token、热力图、Agent 和模型。新发现的 Agent 默认自动加入。",
-                    en: "This selection affects the menu bar metric and all popover usage. Newly discovered agents are included automatically."
-                ))
+                Text(UIStrings.text(zh: "数据来源", en: "Data Sources"))
             }
 
             Section {
                 Toggle(
-                    UIStrings.text(zh: "监控订阅额度（联网）", en: "Monitor subscription limits (network)"),
+                    UIStrings.text(zh: "联网监控", en: "Online monitoring"),
                     isOn: $enablesLimitMonitoring
                 )
+                .toggleStyle(.switch)
 
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(UIStrings.text(zh: "下拉显示的额度", en: "Limits shown in the popover"))
-                        .font(.callout.weight(.medium))
+                if enablesLimitMonitoring {
                     quotaToggle("Claude", sourceID: .claudeQuota)
                     quotaToggle("Codex", sourceID: .codexQuota)
                 }
-                .disabled(!enablesLimitMonitoring)
             } header: {
-                Text(UIStrings.text(zh: "网络与额度", en: "Network & Limits"))
-            } footer: {
-                if !enablesLimitMonitoring {
-                    Text(UIStrings.text(
-                        zh: "开启额度监控后可修改显示范围。之前的选择会被保留。",
-                        en: "Enable limit monitoring to change visibility. Previous choices are preserved."
-                    ))
-                }
+                Text(UIStrings.text(zh: "订阅额度", en: "Subscription Limits"))
             }
 
             Section(UIStrings.text(zh: "更新", en: "Updates")) {
-                LabeledContent(
-                    UIStrings.text(zh: "当前版本", en: "Current Version"),
-                    value: currentVersion
-                )
                 HStack {
-                    Text(UIStrings.checkForUpdates)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("VibeUsage")
+                        Text(UIStrings.text(
+                            zh: "版本 \(currentVersion)",
+                            en: "Version \(currentVersion)"
+                        ))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    }
                     Spacer()
-                    Button(UIStrings.text(zh: "检查", en: "Check"), action: onCheckForUpdates)
+                    Button(UIStrings.checkForUpdates, action: onCheckForUpdates)
                         .disabled(!canCheckForUpdates)
+                        .frame(minWidth: 100, alignment: .trailing)
+                }
+
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(UIStrings.text(zh: "模型价格", en: "Model Prices"))
+                        if let pricingLastUpdatedAt {
+                            Text(UIStrings.updated(pricingLastUpdatedAt))
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        } else {
+                            Text(UIStrings.text(
+                                zh: "正在使用应用内置价格。",
+                                en: "Using prices bundled with the app."
+                            ))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        }
+                    }
+                    Spacer()
+                    Button(action: onUpdatePricing) {
+                        if isUpdatingPricing {
+                            HStack(spacing: 6) {
+                                ProgressView()
+                                    .controlSize(.small)
+                                Text(UIStrings.text(zh: "更新中", en: "Updating"))
+                            }
+                        } else {
+                            Text(UIStrings.text(zh: "更新价格", en: "Update Prices"))
+                        }
+                    }
+                    .disabled(isUpdatingPricing)
+                    .frame(minWidth: 100, alignment: .trailing)
+                }
+
+                if let pricingUpdateError {
+                    Text(pricingUpdateError)
+                        .font(.caption)
+                        .foregroundStyle(.red)
                 }
             }
         }
@@ -151,29 +193,6 @@ public struct VibeUsageSettingsView: View {
             zh: "请在系统设置的“登录项与扩展”中允许 VibeUsage。",
             en: "Allow VibeUsage in Login Items & Extensions in System Settings."
         )
-    }
-
-    private func agentSelection(
-        title: String,
-        hiddenSourceIDs: Binding<Set<AgentSourceID>>
-    ) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(title)
-                .font(.callout.weight(.medium))
-            if configurableAgentSources.isEmpty {
-                Text(UIStrings.text(zh: "尚未发现本地 Agent", en: "No local agents discovered"))
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-            } else {
-                ForEach(configurableAgentSources) { descriptor in
-                    Toggle(isOn: visibilityBinding(for: descriptor.id, hiddenSourceIDs: hiddenSourceIDs)) {
-                        AgentSettingLabel(descriptor: descriptor)
-                    }
-                    .toggleStyle(.checkbox)
-                }
-            }
-        }
-        .padding(.vertical, 2)
     }
 
     private func quotaToggle(_ title: String, sourceID: AgentSourceID) -> some View {

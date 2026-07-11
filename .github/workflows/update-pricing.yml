@@ -1,0 +1,36 @@
+name: Update model pricing
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-model-pricing
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Refresh pricing snapshot
+        run: python3 Scripts/update-pricing.py
+
+      - name: Commit updated pricing
+        run: |
+          if git diff --quiet -- Sources/VibeUsagePricing/Resources/model_prices.json; then
+            echo "Pricing snapshot unchanged."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Sources/VibeUsagePricing/Resources/model_prices.json
+          git commit -m "Update model pricing"
+          git push || (git pull --rebase && git push)

@@ -134,7 +134,7 @@ let package = Package(
         ),
         .testTarget(
             name: "VibeUsageAppTests",
-            dependencies: ["VibeUsageApp"]
+            dependencies: ["VibeUsageApp", "VibeUsageUI"]
         ),
 
         .executableTarget(

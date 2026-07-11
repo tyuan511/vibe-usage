@@ -4,7 +4,7 @@ import Foundation
 /// alias-resolved model family key (e.g. "claude-sonnet-4", "gpt-5") to its
 /// rates. Refreshed by `Scripts/update-pricing.py` from LiteLLM's community
 /// pricing dataset.
-struct PricingSnapshotEntry: Decodable {
+struct PricingSnapshotEntry: Codable {
     let inputPerMillion: Decimal
     let outputPerMillion: Decimal
     let cacheWritePerMillion: Decimal?

@@ -57,8 +57,8 @@ import VibeUsageCore
         _ = manager.subscriptionTier(for: .claudeQuota)
         _ = await manager.validAccessToken(for: .claudeQuota)
 
-        #expect(store.loadCount(for: .claudeQuota) == 0)
-        #expect(store.loadAllCount == 1)
+        #expect(store.loadCount(for: .claudeQuota) == 1)
+        #expect(store.loadAllCount == 0)
     }
 
     @Test func validAccessTokenRefreshesWhenNearExpiry() async {
@@ -239,6 +239,7 @@ final class CountingConnectedAccountStore: ConnectedAccountStoring, @unchecked S
     private var accounts: [AgentSourceID: ConnectedAccount] = [:]
     private var loadCounts: [AgentSourceID: Int] = [:]
     private(set) var loadAllCount = 0
+    var totalLoadCount: Int { loadCounts.values.reduce(0, +) }
 
     func load(_ provider: AgentSourceID) -> ConnectedAccount? {
         loadCounts[provider, default: 0] += 1

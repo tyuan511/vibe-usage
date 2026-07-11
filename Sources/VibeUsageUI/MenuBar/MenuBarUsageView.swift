@@ -195,14 +195,26 @@ public struct MenuBarUsageView: View {
     private func saveImage() {
         Task {
             guard let data = await exportPNGData() else { return }
-            let panel = NSSavePanel()
-            panel.allowedContentTypes = [.png]
-            panel.nameFieldStringValue = "VibeUsage-\(snapshot.rangeEndDay).png"
-            panel.begin { response in
-                guard response == .OK, let url = panel.url else { return }
-                try? data.write(to: url)
-            }
+            imageSaveAction.run(
+                data: data,
+                defaultFilename: "VibeUsage-\(snapshot.rangeEndDay).png"
+            )
         }
+    }
+
+    private var imageSaveAction: MenuBarImageSaveAction {
+        MenuBarImageSaveAction(
+            activateApplication: { NSApp.activate(ignoringOtherApps: true) },
+            presentSavePanel: { defaultFilename, completion in
+                let panel = NSSavePanel()
+                panel.allowedContentTypes = [.png]
+                panel.nameFieldStringValue = defaultFilename
+                panel.begin { response in
+                    completion(response == .OK ? panel.url : nil)
+                }
+            },
+            writeData: { data, url in try data.write(to: url) }
+        )
     }
 
     private func copyImage() {

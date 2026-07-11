@@ -19,11 +19,7 @@ struct VibeUsageApp: App {
         MenuBarExtra {
             MenuContentView(viewModel: viewModel, updateController: updateController)
         } label: {
-            if let menuBarMetricText = viewModel.menuBarMetricText {
-                Label(menuBarMetricText, systemImage: "chart.bar.xaxis")
-            } else {
-                Image(systemName: "chart.bar.xaxis")
-            }
+            MenuBarStatusLabel(metrics: viewModel.menuBarMetrics)
         }
         .menuBarExtraStyle(.window)
 
@@ -38,6 +34,10 @@ struct VibeUsageApp: App {
                 hiddenAgentSourceIDs: $viewModel.hiddenAgentSourceIDs,
                 enablesLimitMonitoring: $viewModel.enablesLimitMonitoring,
                 hiddenQuotaSourceIDs: $viewModel.hiddenQuotaSourceIDs,
+                pricingLastUpdatedAt: viewModel.pricingLastUpdatedAt,
+                pricingUpdateError: viewModel.pricingUpdateError,
+                isUpdatingPricing: viewModel.isUpdatingPricing,
+                onUpdatePricing: { viewModel.updatePricing() },
                 loginItemRequiresApproval: loginItemController.requiresApproval,
                 loginItemError: loginItemController.errorDescription,
                 onOpenLoginItemSettings: { loginItemController.openSystemSettings() },
@@ -51,6 +51,44 @@ struct VibeUsageApp: App {
                 loginItemController.refresh()
             }
         }
+    }
+}
+
+struct MenuBarStatusLabel: View {
+    let metrics: MenuBarMetricValues?
+
+    var body: some View {
+        if let metrics {
+            Image(nsImage: MenuBarStatusImageRenderer.image(for: metrics))
+                .accessibilityLabel("\(metrics.spend), \(metrics.tokens)")
+        } else {
+            Image(systemName: "chart.bar.xaxis")
+        }
+    }
+}
+
+enum MenuBarStatusImageRenderer {
+    @MainActor
+    static func image(for metrics: MenuBarMetricValues) -> NSImage {
+        let content = HStack(spacing: 5) {
+            Image(systemName: "chart.bar.xaxis")
+                .font(.system(size: 13, weight: .medium))
+            VStack(alignment: .trailing, spacing: 0) {
+                Text(metrics.spend)
+                Text(metrics.tokens)
+            }
+            .font(.system(size: 8, weight: .semibold, design: .monospaced))
+            .lineLimit(1)
+            .fixedSize(horizontal: true, vertical: true)
+        }
+        .foregroundStyle(.black)
+        .fixedSize()
+
+        let renderer = ImageRenderer(content: content)
+        renderer.scale = 2
+        let image = renderer.nsImage ?? NSImage()
+        image.isTemplate = true
+        return image
     }
 }
 
@@ -114,9 +152,12 @@ final class AppViewModel: ObservableObject {
             reloadMenuBarMetric()
         }
     }
-    @Published var menuBarMetricText: String?
+    @Published var menuBarMetrics: MenuBarMetricValues?
     @Published var quota: QuotaSnapshot = .empty
     @Published var quotaConnectUIStates: [AgentSourceID: QuotaConnectUIState] = [:]
+    @Published var isUpdatingPricing = false
+    @Published var pricingLastUpdatedAt: Date?
+    @Published var pricingUpdateError: String?
     @Published var hiddenQuotaSourceIDs: Set<AgentSourceID> {
         didSet {
             Self.saveHiddenQuotaSourceIDs(hiddenQuotaSourceIDs)
@@ -131,6 +172,10 @@ final class AppViewModel: ObservableObject {
     }
 
     private let ingestor: UsageIngestor?
+    private let eventStore: (any UsageEventStore)?
+    private let pricing: CurrentPricingProvider?
+    private let pricingSnapshotStore: PricingSnapshotStore
+    private let pricingUpdateService: PricingUpdateService
     private let aggregation: UsageAggregationService?
     private let allSourceDescriptors: [AgentSourceDescriptor]
     private let quotaService: QuotaService
@@ -138,7 +183,11 @@ final class AppViewModel: ObservableObject {
     private var locallyDiscoveredSourceIDs = Set<AgentSourceID>()
     private var autoRefreshCoordinator: UsageAutoRefreshCoordinator?
     private var pendingRefresh = false
+    private var pendingPricingUpdate = false
+    private var isPricingUpdateInProgress = false
+    private var pricingUpdateReportsErrors = false
     private var quotaRefreshTimer: Timer?
+    private var pricingRefreshTimer: Timer?
     private var isInitializing = true
 
     init() {
@@ -155,7 +204,11 @@ final class AppViewModel: ObservableObject {
         self.menuBarMetricMode = Self.loadMenuBarMetricMode()
         self.enablesLimitMonitoring = Self.loadEnablesLimitMonitoring()
         self.snapshot = .empty()
-        self.menuBarMetricText = nil
+        self.menuBarMetrics = nil
+        let pricingSnapshotStore = PricingSnapshotStore()
+        self.pricingSnapshotStore = pricingSnapshotStore
+        self.pricingUpdateService = PricingUpdateService(store: pricingSnapshotStore)
+        self.pricingLastUpdatedAt = pricingSnapshotStore.lastUpdatedAt
 
         let enablesLimitMonitoringKey = Self.enablesLimitMonitoringKey
         let capturedEnablesLimitMonitoring: @Sendable () -> Bool = {
@@ -169,29 +222,36 @@ final class AppViewModel: ObservableObject {
         do {
             let database = try UsageDatabase(path: UsageDatabase.defaultStorePath())
             let store = GRDBUsageEventStore(database: database)
-            let pricing = BundledPricingProvider()
+            let pricing = CurrentPricingProvider(BundledPricingProvider())
             _ = try store.repriceEstimatedEvents(using: pricing)
+            self.eventStore = store
+            self.pricing = pricing
             self.ingestor = UsageIngestor(registry: registry, store: store, pricing: pricing)
             self.aggregation = UsageAggregationService(store: store, registry: registry)
 
             autoRefreshCoordinator = UsageAutoRefreshCoordinator(registry: registry) { [weak self] in
-                await self?.performRefresh()
+                await self?.refresh()
             }
             autoRefreshCoordinator?.start()
         } catch {
             self.ingestor = nil
             self.aggregation = nil
+            self.eventStore = nil
+            self.pricing = nil
             self.startupError = error.localizedDescription
         }
 
         refreshQuota()
         startQuotaRefreshTimer()
         isInitializing = false
+        startPricingRefreshTimer()
+        refreshPricingSilentlyIfNeeded()
     }
 
     deinit {
         autoRefreshCoordinator?.stop()
         quotaRefreshTimer?.invalidate()
+        pricingRefreshTimer?.invalidate()
     }
 
     /// Refreshes quota state independently of the local-cost scan pipeline —
@@ -254,9 +314,26 @@ final class AppViewModel: ObservableObject {
         quotaRefreshTimer = timer
     }
 
+    /// Checks hourly so a snapshot that was nearly one day old on launch does
+    /// not wait another full day. Network activity still occurs at most daily.
+    private func startPricingRefreshTimer() {
+        pricingRefreshTimer?.invalidate()
+        let timer = Timer(timeInterval: 60 * 60, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                self?.refreshPricingSilentlyIfNeeded()
+            }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        pricingRefreshTimer = timer
+    }
+
     func refresh() {
         refreshQuota()
         guard ingestor != nil else { return }
+        guard !isPricingUpdateInProgress else {
+            pendingRefresh = true
+            return
+        }
         guard !isRefreshing else {
             pendingRefresh = true
             return
@@ -266,6 +343,14 @@ final class AppViewModel: ObservableObject {
 
     private func performRefresh() {
         guard let ingestor, let aggregation else { return }
+        guard !isPricingUpdateInProgress else {
+            pendingRefresh = true
+            return
+        }
+        guard !isRefreshing else {
+            pendingRefresh = true
+            return
+        }
         isRefreshing = true
         lastError = nil
 
@@ -303,6 +388,106 @@ final class AppViewModel: ObservableObject {
 
     private func finishRefreshCycle() {
         isRefreshing = false
+        if pendingPricingUpdate {
+            pendingPricingUpdate = false
+            performPricingUpdate()
+            return
+        }
+        if pendingRefresh {
+            pendingRefresh = false
+            performRefresh()
+        }
+    }
+
+    func updatePricing() {
+        requestPricingUpdate(reportingProgress: true)
+    }
+
+    private func refreshPricingSilentlyIfNeeded() {
+        let now = Date()
+        let lastAttempt = UserDefaults.standard.object(
+            forKey: Self.lastAutomaticPricingRefreshAttemptKey
+        ) as? Date
+        guard pricingSnapshotStore.shouldAttemptAutomaticRefresh(
+            lastAttemptAt: lastAttempt,
+            at: now
+        ) else { return }
+        UserDefaults.standard.set(now, forKey: Self.lastAutomaticPricingRefreshAttemptKey)
+        requestPricingUpdate(reportingProgress: false)
+    }
+
+    private func requestPricingUpdate(reportingProgress: Bool) {
+        if isPricingUpdateInProgress {
+            if reportingProgress {
+                isUpdatingPricing = true
+                pricingUpdateReportsErrors = true
+                pricingUpdateError = nil
+            }
+            return
+        }
+
+        isPricingUpdateInProgress = true
+        isUpdatingPricing = reportingProgress
+        pricingUpdateReportsErrors = reportingProgress
+        if reportingProgress {
+            pricingUpdateError = nil
+        }
+
+        if isRefreshing {
+            pendingPricingUpdate = true
+            return
+        }
+        performPricingUpdate()
+    }
+
+    private func performPricingUpdate() {
+        guard let eventStore, let pricing else {
+            let reportsErrors = pricingUpdateReportsErrors
+            isPricingUpdateInProgress = false
+            isUpdatingPricing = false
+            pricingUpdateReportsErrors = false
+            if reportsErrors {
+                pricingUpdateError = VibeUsageStrings.text(
+                    zh: "价格更新不可用：本地数据库尚未准备好。",
+                    en: "Price updates are unavailable because the local database is not ready."
+                )
+            }
+            return
+        }
+
+        Task.detached { [weak self, pricingUpdateService, pricingSnapshotStore, pricing, eventStore] in
+            do {
+                let result = try await pricingUpdateService.update()
+                let updatedPricing = BundledPricingProvider(
+                    localSnapshotURL: pricingSnapshotStore.snapshotURL
+                )
+                pricing.replace(with: updatedPricing)
+                _ = try eventStore.repriceEstimatedEvents(using: pricing)
+
+                await MainActor.run { [weak self] in
+                    guard let self else { return }
+                    pricingLastUpdatedAt = result.updatedAt
+                    pricingUpdateError = nil
+                    applyFilters()
+                    reloadMenuBarMetric()
+                    finishPricingUpdate()
+                }
+            } catch {
+                await MainActor.run { [weak self] in
+                    guard let self else { return }
+                    if pricingUpdateReportsErrors {
+                        pricingUpdateError = error.localizedDescription
+                    }
+                    finishPricingUpdate()
+                }
+            }
+        }
+    }
+
+    private func finishPricingUpdate() {
+        isPricingUpdateInProgress = false
+        isUpdatingPricing = false
+        pricingUpdateReportsErrors = false
         if pendingRefresh {
             pendingRefresh = false
             performRefresh()
@@ -328,7 +513,7 @@ final class AppViewModel: ObservableObject {
 
     private func reloadMenuBarMetric() {
         guard menuBarMetricMode != .hidden else {
-            menuBarMetricText = nil
+            menuBarMetrics = nil
             return
         }
         guard let aggregation else { return }
@@ -340,12 +525,12 @@ final class AppViewModel: ObservableObject {
                 ),
                 dateRange: .today
             )
-            menuBarMetricText = MenuBarMetricFormatter.text(
+            menuBarMetrics = MenuBarMetricFormatter.values(
                 for: menuBarMetricMode,
                 totals: todaySnapshot.totals
             )
         } catch {
-            menuBarMetricText = MenuBarMetricFormatter.text(
+            menuBarMetrics = MenuBarMetricFormatter.values(
                 for: menuBarMetricMode,
                 totals: UsageTotals()
             )
@@ -371,6 +556,7 @@ final class AppViewModel: ObservableObject {
     private static let menuBarMetricModeKey = "menuBarMetricMode"
     private static let showsSpendInMenuBarKey = "showsSpendInMenuBar"
     private static let enablesLimitMonitoringKey = "enablesLimitMonitoring"
+    private static let lastAutomaticPricingRefreshAttemptKey = "lastAutomaticPricingRefreshAttempt"
 
     private static func loadHiddenAgentSourceIDs() -> Set<AgentSourceID> {
         loadSourceIDs(key: hiddenAgentSourceIDsKey)

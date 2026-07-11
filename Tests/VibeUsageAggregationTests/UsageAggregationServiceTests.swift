@@ -4,6 +4,18 @@ import VibeUsageCore
 import VibeUsageStorage
 @testable import VibeUsageAggregation
 
+@Test func dashboardDateRangePresetsFollowMenuOrder() {
+    #expect(UsageDateRangePreset.allCases == [
+        .today,
+        .yesterday,
+        .thisWeek,
+        .thisMonth,
+        .last7Days,
+        .last30Days,
+        .last90Days,
+    ])
+}
+
 @Test func dashboardSnapshotCombinesDailyRowsAndModelEventCounts() throws {
     let registry = AdapterRegistry()
     let descriptor = AgentSourceDescriptor(

@@ -71,11 +71,11 @@ public struct ModelUsageSummary: Identifiable, Sendable, Equatable {
 public enum UsageDateRangePreset: String, CaseIterable, Identifiable, Sendable {
     case today
     case yesterday
+    case thisWeek
+    case thisMonth
     case last7Days
     case last30Days
     case last90Days
-    case thisWeek
-    case thisMonth
 
     public var id: String { rawValue }
 
