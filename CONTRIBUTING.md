@@ -40,9 +40,9 @@ python3 Scripts/update-pricing.py
 
 Then add/adjust tests in `Tests/VibeUsagePricingTests/` when new model families matter for supported agents.
 
-## Share Poster Preview
+## Menu Bar Share Preview
 
-The share poster preview image is generated from real SwiftUI code:
+The share preview image is generated from the real SwiftUI popover view:
 
 ```bash
 Scripts/regenerate-preview.sh

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Renders docs/usage-share-preview.png from the SwiftUI preview renderer.
+# Renders the menu bar share preview from the real SwiftUI popover view.
 #
 # Usage: Scripts/regenerate-preview.sh [output-path]
 set -euo pipefail
@@ -14,5 +14,5 @@ echo "==> swift build -c ${CONFIG} --product VibeUsagePreviewRenderer"
 swift build -c "${CONFIG}" --product VibeUsagePreviewRenderer
 
 echo "==> Rendering ${OUTPUT}"
-".build/${CONFIG}/VibeUsagePreviewRenderer" "${OUTPUT}" --share-card
+".build/${CONFIG}/VibeUsagePreviewRenderer" "${OUTPUT}" --menu-bar
 echo "==> Wrote ${OUTPUT}"

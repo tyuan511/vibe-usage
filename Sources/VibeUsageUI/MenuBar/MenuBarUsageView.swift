@@ -6,7 +6,6 @@ import VibeUsageQuota
 
 public struct MenuBarUsageView: View {
     let snapshot: UsageDashboardSnapshot
-    let shareSnapshot: UsageInsightsSnapshot
     let isRefreshing: Bool
     let lastError: String?
     let quota: QuotaSnapshot
@@ -18,6 +17,7 @@ public struct MenuBarUsageView: View {
     let onFilterChange: () -> Void
     let onOpenSettings: () -> Void
     let onQuit: () -> Void
+    let availableUpdateVersion: String?
     let canCheckForUpdates: Bool
     let onCheckForUpdates: () -> Void
     let onQuotaConnect: (AgentSourceID) -> Void
@@ -27,7 +27,6 @@ public struct MenuBarUsageView: View {
 
     public init(
         snapshot: UsageDashboardSnapshot,
-        shareSnapshot: UsageInsightsSnapshot,
         isRefreshing: Bool,
         lastError: String?,
         quota: QuotaSnapshot,
@@ -39,6 +38,7 @@ public struct MenuBarUsageView: View {
         onFilterChange: @escaping () -> Void,
         onOpenSettings: @escaping () -> Void,
         onQuit: @escaping () -> Void,
+        availableUpdateVersion: String? = nil,
         canCheckForUpdates: Bool = false,
         onCheckForUpdates: @escaping () -> Void = {},
         onQuotaConnect: @escaping (AgentSourceID) -> Void = { _ in },
@@ -46,7 +46,6 @@ public struct MenuBarUsageView: View {
         onQuotaCancelConnect: @escaping (AgentSourceID) -> Void = { _ in }
     ) {
         self.snapshot = snapshot
-        self.shareSnapshot = shareSnapshot
         self.isRefreshing = isRefreshing
         self.lastError = lastError
         self.quota = quota
@@ -58,6 +57,7 @@ public struct MenuBarUsageView: View {
         self.onFilterChange = onFilterChange
         self.onOpenSettings = onOpenSettings
         self.onQuit = onQuit
+        self.availableUpdateVersion = availableUpdateVersion
         self.canCheckForUpdates = canCheckForUpdates
         self.onCheckForUpdates = onCheckForUpdates
         self.onQuotaConnect = onQuotaConnect
@@ -183,51 +183,55 @@ public struct MenuBarUsageView: View {
         .buttonStyle(.plain)
         .controlSize(.small)
         .frame(width: 28, height: 28)
-        .disabled(shareSnapshot.totals.eventCount == 0)
+        .disabled(snapshot.totals.eventCount == 0)
         .help(UIStrings.text(zh: "导出图片", en: "Export image"))
     }
 
-    private func exportPNGData() -> Data? {
-        DashboardImageExporter.renderPNGData(
-            snapshot: shareSnapshot,
-            rangeTitle: selectedDateRange.displayName
-        )
+    private func exportPNGData() async -> Data? {
+        guard let window = shareAnchorView?.window ?? NSApp.keyWindow else { return nil }
+        return await MenuBarImageExporter.renderPNGData(window: window)
     }
 
     private func saveImage() {
-        guard let data = exportPNGData() else { return }
-        let panel = NSSavePanel()
-        panel.allowedContentTypes = [.png]
-        panel.nameFieldStringValue = "VibeUsage-\(shareSnapshot.rangeEndDay).png"
-        panel.begin { response in
-            guard response == .OK, let url = panel.url else { return }
-            try? data.write(to: url)
+        Task {
+            guard let data = await exportPNGData() else { return }
+            let panel = NSSavePanel()
+            panel.allowedContentTypes = [.png]
+            panel.nameFieldStringValue = "VibeUsage-\(snapshot.rangeEndDay).png"
+            panel.begin { response in
+                guard response == .OK, let url = panel.url else { return }
+                try? data.write(to: url)
+            }
         }
     }
 
     private func copyImage() {
-        guard let data = exportPNGData() else { return }
-        let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
-        pasteboard.setData(data, forType: .png)
-        if let image = NSImage(data: data), let tiffData = image.tiffRepresentation {
-            pasteboard.setData(tiffData, forType: .tiff)
+        Task {
+            guard let data = await exportPNGData() else { return }
+            let pasteboard = NSPasteboard.general
+            pasteboard.clearContents()
+            pasteboard.setData(data, forType: .png)
+            if let image = NSImage(data: data), let tiffData = image.tiffRepresentation {
+                pasteboard.setData(tiffData, forType: .tiff)
+            }
         }
     }
 
     private func shareImage() {
-        guard let data = exportPNGData(), let image = NSImage(data: data) else { return }
-        let picker = NSSharingServicePicker(items: [image])
-        if let anchorView = shareAnchorView {
-            picker.show(relativeTo: anchorView.bounds, of: anchorView, preferredEdge: .minY)
-        } else if let contentView = NSApp.keyWindow?.contentView {
-            let topRight = NSRect(
-                x: contentView.bounds.maxX - 1,
-                y: contentView.bounds.maxY - 1,
-                width: 1,
-                height: 1
-            )
-            picker.show(relativeTo: topRight, of: contentView, preferredEdge: .minY)
+        Task {
+            guard let data = await exportPNGData(), let image = NSImage(data: data) else { return }
+            let picker = NSSharingServicePicker(items: [image])
+            if let anchorView = shareAnchorView {
+                picker.show(relativeTo: anchorView.bounds, of: anchorView, preferredEdge: .minY)
+            } else if let contentView = NSApp.keyWindow?.contentView {
+                let topRight = NSRect(
+                    x: contentView.bounds.maxX - 1,
+                    y: contentView.bounds.maxY - 1,
+                    width: 1,
+                    height: 1
+                )
+                picker.show(relativeTo: topRight, of: contentView, preferredEdge: .minY)
+            }
         }
     }
 
@@ -386,7 +390,8 @@ public struct MenuBarUsageView: View {
             Divider()
             HStack(spacing: 10) {
                 Button(action: onCheckForUpdates) {
-                    Label(UIStrings.checkForUpdates, systemImage: "arrow.triangle.2.circlepath")
+                    Label(updateButtonTitle, systemImage: updateButtonSystemImage)
+                        .foregroundStyle(availableUpdateVersion == nil ? Color.primary : Color.accentColor)
                 }
                 .buttonStyle(.plain)
                 .controlSize(.small)
@@ -404,6 +409,18 @@ public struct MenuBarUsageView: View {
                 .controlSize(.small)
             }
         }
+    }
+
+    private var updateButtonTitle: String {
+        guard let availableUpdateVersion else { return UIStrings.checkForUpdates }
+        return UIStrings.text(
+            zh: "发现新版本 \(availableUpdateVersion)",
+            en: "Update \(availableUpdateVersion) Available"
+        )
+    }
+
+    private var updateButtonSystemImage: String {
+        availableUpdateVersion == nil ? "arrow.triangle.2.circlepath" : "arrow.down.circle.fill"
     }
 
     private var dateRangeSelection: Binding<UsageDateRangePreset> {

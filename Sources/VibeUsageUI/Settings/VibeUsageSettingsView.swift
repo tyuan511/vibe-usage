@@ -7,6 +7,7 @@ public struct VibeUsageSettingsView: View {
     @Binding var hiddenAgentSourceIDs: Set<AgentSourceID>
     @Binding var enablesLimitMonitoring: Bool
     @Binding var hiddenQuotaSourceIDs: Set<AgentSourceID>
+    let currentVersion: String
     let canCheckForUpdates: Bool
     let onCheckForUpdates: () -> Void
 
@@ -16,6 +17,7 @@ public struct VibeUsageSettingsView: View {
         hiddenAgentSourceIDs: Binding<Set<AgentSourceID>>,
         enablesLimitMonitoring: Binding<Bool>,
         hiddenQuotaSourceIDs: Binding<Set<AgentSourceID>>,
+        currentVersion: String,
         canCheckForUpdates: Bool,
         onCheckForUpdates: @escaping () -> Void
     ) {
@@ -24,6 +26,7 @@ public struct VibeUsageSettingsView: View {
         self._hiddenAgentSourceIDs = hiddenAgentSourceIDs
         self._enablesLimitMonitoring = enablesLimitMonitoring
         self._hiddenQuotaSourceIDs = hiddenQuotaSourceIDs
+        self.currentVersion = currentVersion
         self.canCheckForUpdates = canCheckForUpdates
         self.onCheckForUpdates = onCheckForUpdates
     }
@@ -88,8 +91,16 @@ public struct VibeUsageSettingsView: View {
             }
 
             Section(UIStrings.text(zh: "更新", en: "Updates")) {
-                Button(UIStrings.checkForUpdates, action: onCheckForUpdates)
-                    .disabled(!canCheckForUpdates)
+                LabeledContent(
+                    UIStrings.text(zh: "当前版本", en: "Current Version"),
+                    value: currentVersion
+                )
+                HStack {
+                    Text(UIStrings.checkForUpdates)
+                    Spacer()
+                    Button(UIStrings.text(zh: "检查", en: "Check"), action: onCheckForUpdates)
+                        .disabled(!canCheckForUpdates)
+                }
             }
         }
         .formStyle(.grouped)

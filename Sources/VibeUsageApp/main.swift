@@ -32,6 +32,7 @@ struct VibeUsageApp: App {
                 hiddenAgentSourceIDs: $viewModel.hiddenAgentSourceIDs,
                 enablesLimitMonitoring: $viewModel.enablesLimitMonitoring,
                 hiddenQuotaSourceIDs: $viewModel.hiddenQuotaSourceIDs,
+                currentVersion: updateController.currentVersion,
                 canCheckForUpdates: updateController.canCheckForUpdates,
                 onCheckForUpdates: { updateController.checkForUpdates() }
             )
@@ -50,7 +51,6 @@ private struct MenuContentView: View {
         } else {
             MenuBarUsageView(
                 snapshot: viewModel.snapshot,
-                shareSnapshot: viewModel.shareSnapshot,
                 isRefreshing: viewModel.isRefreshing,
                 lastError: viewModel.lastError,
                 quota: viewModel.enablesLimitMonitoring ? viewModel.quota : .empty,
@@ -65,6 +65,7 @@ private struct MenuContentView: View {
                     NSApp.activate(ignoringOtherApps: true)
                 },
                 onQuit: { NSApp.terminate(nil) },
+                availableUpdateVersion: updateController.availableVersion,
                 canCheckForUpdates: updateController.canCheckForUpdates,
                 onCheckForUpdates: { updateController.checkForUpdates() },
                 onQuotaConnect: { viewModel.connectQuota($0) },
@@ -100,7 +101,6 @@ final class AppViewModel: ObservableObject {
         }
     }
     @Published var menuBarMetricText: String?
-    @Published var shareSnapshot: UsageInsightsSnapshot
     @Published var quota: QuotaSnapshot = .empty
     @Published var quotaConnectUIStates: [AgentSourceID: QuotaConnectUIState] = [:]
     @Published var hiddenQuotaSourceIDs: Set<AgentSourceID> {
@@ -141,7 +141,6 @@ final class AppViewModel: ObservableObject {
         self.menuBarMetricMode = Self.loadMenuBarMetricMode()
         self.enablesLimitMonitoring = Self.loadEnablesLimitMonitoring()
         self.snapshot = .empty()
-        self.shareSnapshot = .empty()
         self.menuBarMetricText = nil
 
         let enablesLimitMonitoringKey = Self.enablesLimitMonitoringKey
@@ -276,7 +275,6 @@ final class AppViewModel: ObservableObject {
                     locallyDiscoveredSourceIDs = summary.discoveredSourceIDs
                     configurableAgentSources = configurableSources
                     snapshot = next
-                    reloadShareSnapshot()
                     reloadMenuBarMetric()
                     finishRefreshCycle()
                 }
@@ -309,23 +307,6 @@ final class AppViewModel: ObservableObject {
                 dateRange: selectedDateRange
             )
             lastError = nil
-            reloadShareSnapshot()
-        } catch {
-            lastError = error.localizedDescription
-        }
-    }
-
-    private func reloadShareSnapshot() {
-        guard let aggregation else { return }
-        do {
-            shareSnapshot = try aggregation.insightsSnapshot(
-                visibleSourceFilter: Self.visibleSourceIDs(
-                    discovered: locallyDiscoveredSourceIDs,
-                    hidden: hiddenAgentSourceIDs
-                ),
-                modelFilter: selectedModelFilter,
-                dateRange: selectedDateRange
-            )
         } catch {
             lastError = error.localizedDescription
         }

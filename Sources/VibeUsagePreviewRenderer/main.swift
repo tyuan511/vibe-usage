@@ -3,143 +3,50 @@ import SwiftUI
 import VibeUsageAdapter
 import VibeUsageAggregation
 import VibeUsageCore
+import VibeUsageQuota
 import VibeUsageUI
 
 @main
 @MainActor
 struct VibeUsagePreviewRenderer {
-    static func main() throws {
+    static func main() async throws {
         let arguments = Array(CommandLine.arguments.dropFirst())
-        let isShareCardSparse = arguments.contains("--share-card-sparse")
         let outputPath = arguments.first(where: { !$0.hasPrefix("--") })
             ?? "docs/usage-share-preview.png"
 
-        try renderShareCard(outputPath: outputPath, sparse: isShareCardSparse)
+        try await renderMenuBar(outputPath: outputPath)
     }
 
-    // MARK: - Share card preview
-
-    /// The share card is a fixed dark-poster design rendered at its explicit
-    /// size, never measured from fitting content.
-    private static func renderShareCard(outputPath: String, sparse: Bool) throws {
-        let snapshot = sparse ? makeSparseShareCardSnapshot() : makeDashboardSnapshot()
-        let size = NSSize(width: DashboardShareCard.width, height: DashboardShareCard.height)
-
-        let view = DashboardShareCard(snapshot: snapshot, rangeTitle: UsageInsightsRange.last30Days.displayName)
-            .environment(\.locale, Locale(identifier: "zh_Hans_CN"))
-
-        try renderPNG(view: view, size: size, scale: 2, outputPath: outputPath, dark: true)
-    }
-
-    /// Low-data mock: a single agent source and two projects, to verify the
-    /// poster layout doesn't collapse or leave awkward gaps when there's
-    /// little to show (no multi-source superlative contrast, thin trend
-    /// line, small stat grid values).
-    private static func makeSparseShareCardSnapshot() -> UsageInsightsSnapshot {
-        let claude = ClaudeCodeAdapter().descriptor
-        let now = dashboardFixedDate()
-        let dayCount = 30
-
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = .current
-        let start = calendar.date(byAdding: .day, value: -(dayCount - 1), to: calendar.startOfDay(for: now)) ?? now
-        let formatter = DateFormatter()
-        formatter.calendar = calendar
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = calendar.timeZone
-        formatter.dateFormat = "yyyy-MM-dd"
-
-        var dailyRows: [DailyUsageSummary] = []
-        for offset in 0..<dayCount {
-            guard let day = calendar.date(byAdding: .day, value: offset, to: start) else { continue }
-            let isActive = offset % 3 != 0
-            guard isActive else { continue }
-            let cost = Decimal(2 + (offset % 5))
-            dailyRows.append(
-                DailyUsageSummary(
-                    day: formatter.string(from: day),
-                    sourceID: claude.id,
-                    tokens: TokenCounts(input: 4_000, output: 900, cacheRead: 1_200),
-                    costUSD: cost
-                )
-            )
-        }
-
-        let totals = dailyRows.reduce(UsageTotals()) { partial, row in
-            UsageTotals(
-                tokens: partial.tokens + row.tokens,
-                costUSD: partial.costUSD + row.costUSD,
-                eventCount: partial.eventCount + 1
-            )
-        }
-
-        let sources: [SourceUsageSummary] = [
-            SourceUsageSummary(descriptor: claude, totals: totals)
-        ]
-
-        let models: [ModelUsageSummary] = [
-            ModelUsageSummary(
-                modelFamily: "claude-sonnet-4",
-                sourceID: claude.id,
-                tokens: totals.tokens,
-                costUSD: totals.costUSD,
-                eventCount: totals.eventCount
-            )
-        ]
-
-        let projects: [ProjectUsageSummary] = [
-            ProjectUsageSummary(
-                project: "/Users/yuantang/code/vibe-usage",
-                sourceID: claude.id,
-                tokens: TokenCounts(input: 40_000, output: 9_000, cacheRead: 12_000),
-                costUSD: totals.costUSD * Decimal(0.7),
-                eventCount: totals.eventCount * 7 / 10,
-                sessionCount: 8
-            ),
-            ProjectUsageSummary(
-                project: "sandbox-experiment",
-                sourceID: claude.id,
-                tokens: TokenCounts(input: 6_000, output: 1_400, cacheRead: 1_800),
-                costUSD: totals.costUSD * Decimal(0.3),
-                eventCount: totals.eventCount * 3 / 10,
-                sessionCount: 2
-            )
-        ]
-
-        let activeDayCount = Set(dailyRows.map(\.day)).count
-
-        return UsageInsightsSnapshot(
-            generatedAt: now,
-            rangeStartDay: dailyRows.map(\.day).min() ?? "2026-06-05",
-            rangeEndDay: dailyRows.map(\.day).max() ?? "2026-07-04",
-            totals: totals,
-            daily: dailyRows,
-            projects: projects,
-            models: models,
-            sources: sources,
-            previousTotals: UsageTotals(tokens: totals.tokens, costUSD: totals.costUSD * Decimal(1.1), eventCount: totals.eventCount),
-            activeDayCount: activeDayCount
+    private static func renderMenuBar(outputPath: String) async throws {
+        let view = MenuBarUsageView(
+            snapshot: makeDashboardSnapshot(),
+            isRefreshing: false,
+            lastError: nil,
+            quota: .empty,
+            selectedDateRange: .constant(.last30Days),
+            selectedModelFilter: .constant([]),
+            hiddenQuotaSourceIDs: [],
+            onRefresh: {},
+            onFilterChange: {},
+            onOpenSettings: {},
+            onQuit: {}
         )
-    }
+        .environment(\.locale, Locale(identifier: "zh_Hans_CN"))
+        .fixedSize(horizontal: false, vertical: true)
 
-    // MARK: - Shared render/encode plumbing
-
-    private static func renderPNG(
-        view: some View,
-        size: NSSize,
-        scale: CGFloat,
-        outputPath: String,
-        dark: Bool = false
-    ) throws {
         let hostingView = NSHostingView(rootView: view)
+        hostingView.frame = NSRect(x: 0, y: 0, width: 388, height: 1_200)
+        hostingView.layoutSubtreeIfNeeded()
+        let size = NSSize(width: 388, height: hostingView.fittingSize.height)
         hostingView.frame = NSRect(origin: .zero, size: size)
-        let appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
-        hostingView.appearance = appearance
 
-        // AppKit dynamic colors (labelColor, windowBackgroundColor, SwiftUI's
-        // `.background` style) resolve against the containing window's
-        // appearance at draw time; a window-less view falls back to Aqua and
-        // renders dark mode with light-resolved colors.
+        let effectView = NSVisualEffectView(frame: NSRect(origin: .zero, size: size))
+        effectView.material = .popover
+        effectView.blendingMode = .behindWindow
+        effectView.state = .active
+        hostingView.autoresizingMask = [.width, .height]
+        effectView.addSubview(hostingView)
+
         let window = NSWindow(
             contentRect: NSRect(origin: .zero, size: size),
             styleMask: [.borderless],
@@ -147,36 +54,17 @@ struct VibeUsagePreviewRenderer {
             defer: false
         )
         window.isReleasedWhenClosed = false
-        window.appearance = appearance
-        window.contentView = hostingView
-        hostingView.layoutSubtreeIfNeeded()
+        window.appearance = NSAppearance(named: .darkAqua)
+        window.backgroundColor = .clear
+        window.isOpaque = false
+        window.contentView = effectView
+        window.orderFrontRegardless()
+        try await Task.sleep(for: .milliseconds(100))
 
-        guard let bitmap = NSBitmapImageRep(
-            bitmapDataPlanes: nil,
-            pixelsWide: Int(size.width * scale),
-            pixelsHigh: Int(size.height * scale),
-            bitsPerSample: 8,
-            samplesPerPixel: 4,
-            hasAlpha: true,
-            isPlanar: false,
-            colorSpaceName: .deviceRGB,
-            bytesPerRow: 0,
-            bitsPerPixel: 0
-        ) else {
-            throw RenderError.bitmapAllocationFailed
-        }
-        bitmap.size = size
-        if let appearance {
-            appearance.performAsCurrentDrawingAppearance {
-                hostingView.cacheDisplay(in: hostingView.bounds, to: bitmap)
-            }
-        } else {
-            hostingView.cacheDisplay(in: hostingView.bounds, to: bitmap)
-        }
-
-        guard let data = bitmap.representation(using: .png, properties: [:]) else {
+        guard let data = await MenuBarImageExporter.renderPNGData(window: window) else {
             throw RenderError.pngEncodingFailed
         }
+        window.orderOut(nil)
 
         let outputURL = URL(fileURLWithPath: outputPath)
         try FileManager.default.createDirectory(
@@ -189,19 +77,12 @@ struct VibeUsagePreviewRenderer {
 }
 
 private enum RenderError: Error {
-    case bitmapAllocationFailed
     case pngEncodingFailed
 }
 
-// MARK: - Dashboard mock data (deliberately messy, mirrors real-world data)
+// MARK: - Menu bar mock data
 
-/// Mock data mirrors the shape of real usage data that motivated this
-/// redesign: one source dominating spend by orders of magnitude, Claude-style
-/// munged paths, Codex-style date-folder "projects", an empty project, long
-/// hyphenated real directory names, lumpy daily activity with zero days and a
-/// spike, and a previous period ~20% lower so the delta badge has something
-/// to show.
-private func makeDashboardSnapshot() -> UsageInsightsSnapshot {
+private func makeDashboardSnapshot() -> UsageDashboardSnapshot {
     let opencode = OpenCodeUsageAdapter().descriptor
     let codex = CodexCLIAdapter().descriptor
     let claude = ClaudeCodeAdapter().descriptor
@@ -240,32 +121,19 @@ private func makeDashboardSnapshot() -> UsageInsightsSnapshot {
         )
     }
 
-    let projects = makeProjectRows(opencode: opencode.id, codex: codex.id, claude: claude.id, gemini: gemini.id)
     let models = makeModelRows(opencode: opencode.id, codex: codex.id, claude: claude.id, gemini: gemini.id)
 
-    let previousTotals = UsageTotals(
-        tokens: TokenCounts(
-            input: Int(Double(grand.tokens.input) * 0.8),
-            output: Int(Double(grand.tokens.output) * 0.8),
-            cacheRead: Int(Double(grand.tokens.cacheRead) * 0.8)
-        ),
-        costUSD: grand.costUSD * Decimal(0.8),
-        eventCount: Int(Double(grand.eventCount) * 0.8)
-    )
-
-    let activeDayCount = Set(dailyRows.map(\.day)).count
-
-    return UsageInsightsSnapshot(
+    return UsageDashboardSnapshot(
         generatedAt: now,
         rangeStartDay: dailyRows.map(\.day).min() ?? "2026-06-05",
         rangeEndDay: dailyRows.map(\.day).max() ?? "2026-07-04",
         totals: grand,
-        daily: dailyRows,
-        projects: projects,
-        models: models,
         sources: sourceSummaries,
-        previousTotals: previousTotals,
-        activeDayCount: activeDayCount
+        daily: dailyRows,
+        activity: dailyRows,
+        models: models,
+        availableModels: models,
+        discoveredSources: [opencode, codex, claude, gemini]
     )
 }
 
@@ -386,133 +254,6 @@ private func makeDailyRows(sources: [AgentSourceDescriptor], endingAt date: Date
         }
     }
     return rows
-}
-
-private func makeProjectRows(
-    opencode: AgentSourceID,
-    codex: AgentSourceID,
-    claude: AgentSourceID,
-    gemini: AgentSourceID
-) -> [ProjectUsageSummary] {
-    [
-        // Same real project reported by two different sources with two
-        // different raw representations -- must merge into one row in the UI.
-        ProjectUsageSummary(
-            project: "-Users-yuantang-code-vibe-usage",
-            sourceID: claude,
-            tokens: TokenCounts(input: 210_000, output: 54_000, cacheRead: 80_000),
-            costUSD: Decimal(string: "24.55")!,
-            eventCount: 58,
-            sessionCount: 12
-        ),
-        ProjectUsageSummary(
-            project: "/Users/yuantang/code/vibe-usage",
-            sourceID: opencode,
-            tokens: TokenCounts(input: 8_900_000, output: 1_100_000, cacheRead: 2_000_000),
-            costUSD: Decimal(string: "1180.42")!,
-            eventCount: 612,
-            sessionCount: 44
-        ),
-        ProjectUsageSummary(
-            project: "/Users/yuantang/code/agent-orchestrator",
-            sourceID: opencode,
-            tokens: TokenCounts(input: 24_000_000, output: 3_200_000, cacheRead: 5_400_000),
-            costUSD: Decimal(string: "3402.11")!,
-            eventCount: 1580,
-            sessionCount: 96
-        ),
-        ProjectUsageSummary(
-            project: "/Users/yuantang/code/agent-orchestrator",
-            sourceID: codex,
-            tokens: TokenCounts(input: 6_400_000, output: 980_000, cacheRead: 1_800_000, reasoning: 320_000),
-            costUSD: Decimal(string: "812.90")!,
-            eventCount: 420,
-            sessionCount: 31
-        ),
-        // Codex date-folder "project" values: not real projects, must land
-        // in the ungrouped bucket, not as individual date rows.
-        ProjectUsageSummary(
-            project: "2025/09/19",
-            sourceID: codex,
-            tokens: TokenCounts(input: 1_200_000, output: 180_000, cacheRead: 300_000),
-            costUSD: Decimal(string: "140.22")!,
-            eventCount: 88,
-            sessionCount: 6
-        ),
-        ProjectUsageSummary(
-            project: "2025/09/20",
-            sourceID: codex,
-            tokens: TokenCounts(input: 900_000, output: 140_000, cacheRead: 220_000),
-            costUSD: Decimal(string: "98.17")!,
-            eventCount: 61,
-            sessionCount: 4
-        ),
-        // Empty project -> also ungrouped.
-        ProjectUsageSummary(
-            project: "",
-            sourceID: codex,
-            tokens: TokenCounts(input: 400_000, output: 62_000, cacheRead: 90_000),
-            costUSD: Decimal(string: "44.60")!,
-            eventCount: 22,
-            sessionCount: 2
-        ),
-        ProjectUsageSummary(
-            project: "-Users-yuantang-code-super-long-hyphenated-client-project-name",
-            sourceID: opencode,
-            tokens: TokenCounts(input: 12_000_000, output: 1_600_000, cacheRead: 2_900_000),
-            costUSD: Decimal(string: "1890.77")!,
-            eventCount: 740,
-            sessionCount: 52
-        ),
-        ProjectUsageSummary(
-            project: "/Users/yuantang/code/marketing-site",
-            sourceID: opencode,
-            tokens: TokenCounts(input: 4_200_000, output: 560_000, cacheRead: 900_000),
-            costUSD: Decimal(string: "620.05")!,
-            eventCount: 260,
-            sessionCount: 20
-        ),
-        ProjectUsageSummary(
-            project: "/Users/yuantang/code/infra-scripts",
-            sourceID: codex,
-            tokens: TokenCounts(input: 1_800_000, output: 260_000, cacheRead: 420_000, reasoning: 80_000),
-            costUSD: Decimal(string: "312.44")!,
-            eventCount: 140,
-            sessionCount: 15
-        ),
-        ProjectUsageSummary(
-            project: "-Users-yuantang-Documents-notes",
-            sourceID: claude,
-            tokens: TokenCounts(input: 60_000, output: 14_000, cacheRead: 22_000),
-            costUSD: Decimal(string: "8.71")!,
-            eventCount: 18,
-            sessionCount: 5
-        ),
-        ProjectUsageSummary(
-            project: "sandbox-experiment",
-            sourceID: gemini,
-            tokens: TokenCounts(input: 2_100, output: 640, cacheRead: 300),
-            costUSD: Decimal(string: "0.19")!,
-            eventCount: 3,
-            sessionCount: 1
-        ),
-        ProjectUsageSummary(
-            project: "/Users/yuantang/code/data-pipeline-v2",
-            sourceID: opencode,
-            tokens: TokenCounts(input: 3_100_000, output: 410_000, cacheRead: 780_000),
-            costUSD: Decimal(string: "451.30")!,
-            eventCount: 190,
-            sessionCount: 14
-        ),
-        ProjectUsageSummary(
-            project: "/Users/yuantang/code/design-system",
-            sourceID: claude,
-            tokens: TokenCounts(input: 26_000, output: 6_000, cacheRead: 9_000),
-            costUSD: Decimal(string: "3.15")!,
-            eventCount: 9,
-            sessionCount: 3
-        )
-    ]
 }
 
 private func dashboardFixedDate() -> Date {

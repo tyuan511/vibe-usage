@@ -35,7 +35,7 @@
     <key>SUPublicEDKey</key>
     <string>gry59asC8wptevxPOknCJmbxfd6hYdaqhG5onLu/mcg=</string>
     <key>SUEnableAutomaticChecks</key>
-    <true/>
+    <false/>
     <key>SUAllowsAutomaticUpdates</key>
     <true/>
     <key>SUAutomaticallyUpdate</key>
