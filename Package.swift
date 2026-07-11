@@ -132,6 +132,10 @@ let package = Package(
                 .product(name: "Sparkle", package: "Sparkle")
             ]
         ),
+        .testTarget(
+            name: "VibeUsageAppTests",
+            dependencies: ["VibeUsageApp"]
+        ),
 
         .executableTarget(
             name: "VibeUsagePreviewRenderer",

@@ -3,29 +3,41 @@ import VibeUsageCore
 
 public struct VibeUsageSettingsView: View {
     let configurableAgentSources: [AgentSourceDescriptor]
+    @Binding var launchesAtLogin: Bool
     @Binding var menuBarMetricMode: MenuBarMetricMode
     @Binding var hiddenAgentSourceIDs: Set<AgentSourceID>
     @Binding var enablesLimitMonitoring: Bool
     @Binding var hiddenQuotaSourceIDs: Set<AgentSourceID>
+    let loginItemRequiresApproval: Bool
+    let loginItemError: String?
+    let onOpenLoginItemSettings: () -> Void
     let currentVersion: String
     let canCheckForUpdates: Bool
     let onCheckForUpdates: () -> Void
 
     public init(
         configurableAgentSources: [AgentSourceDescriptor],
+        launchesAtLogin: Binding<Bool>,
         menuBarMetricMode: Binding<MenuBarMetricMode>,
         hiddenAgentSourceIDs: Binding<Set<AgentSourceID>>,
         enablesLimitMonitoring: Binding<Bool>,
         hiddenQuotaSourceIDs: Binding<Set<AgentSourceID>>,
+        loginItemRequiresApproval: Bool,
+        loginItemError: String?,
+        onOpenLoginItemSettings: @escaping () -> Void,
         currentVersion: String,
         canCheckForUpdates: Bool,
         onCheckForUpdates: @escaping () -> Void
     ) {
         self.configurableAgentSources = configurableAgentSources
+        self._launchesAtLogin = launchesAtLogin
         self._menuBarMetricMode = menuBarMetricMode
         self._hiddenAgentSourceIDs = hiddenAgentSourceIDs
         self._enablesLimitMonitoring = enablesLimitMonitoring
         self._hiddenQuotaSourceIDs = hiddenQuotaSourceIDs
+        self.loginItemRequiresApproval = loginItemRequiresApproval
+        self.loginItemError = loginItemError
+        self.onOpenLoginItemSettings = onOpenLoginItemSettings
         self.currentVersion = currentVersion
         self.canCheckForUpdates = canCheckForUpdates
         self.onCheckForUpdates = onCheckForUpdates
@@ -33,6 +45,27 @@ public struct VibeUsageSettingsView: View {
 
     public var body: some View {
         Form {
+            Section {
+                Toggle(
+                    UIStrings.text(zh: "登录时启动", en: "Launch at Login"),
+                    isOn: $launchesAtLogin
+                )
+
+                if loginItemRequiresApproval || loginItemError != nil {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(loginItemMessage)
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                        Button(
+                            UIStrings.text(zh: "打开系统设置", en: "Open System Settings"),
+                            action: onOpenLoginItemSettings
+                        )
+                    }
+                }
+            } header: {
+                Text(UIStrings.text(zh: "通用", en: "General"))
+            }
+
             Section {
                 Picker(
                     UIStrings.text(zh: "指标", en: "Metric"),
@@ -105,6 +138,19 @@ public struct VibeUsageSettingsView: View {
         }
         .formStyle(.grouped)
         .frame(width: 520, height: 640)
+    }
+
+    private var loginItemMessage: String {
+        if let loginItemError {
+            return UIStrings.text(
+                zh: "无法更新登录项：\(loginItemError)",
+                en: "Could not update the login item: \(loginItemError)"
+            )
+        }
+        return UIStrings.text(
+            zh: "请在系统设置的“登录项与扩展”中允许 VibeUsage。",
+            en: "Allow VibeUsage in Login Items & Extensions in System Settings."
+        )
     }
 
     private func agentSelection(

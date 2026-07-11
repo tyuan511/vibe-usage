@@ -12,6 +12,8 @@ import VibeUsageWatching
 struct VibeUsageApp: App {
     @StateObject private var viewModel = AppViewModel()
     @StateObject private var updateController = SparkleUpdateController()
+    @StateObject private var loginItemController = LoginItemController()
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {
         MenuBarExtra {
@@ -28,14 +30,26 @@ struct VibeUsageApp: App {
         Settings {
             VibeUsageSettingsView(
                 configurableAgentSources: viewModel.configurableAgentSources,
+                launchesAtLogin: Binding(
+                    get: { loginItemController.isEnabled },
+                    set: { loginItemController.setEnabled($0) }
+                ),
                 menuBarMetricMode: $viewModel.menuBarMetricMode,
                 hiddenAgentSourceIDs: $viewModel.hiddenAgentSourceIDs,
                 enablesLimitMonitoring: $viewModel.enablesLimitMonitoring,
                 hiddenQuotaSourceIDs: $viewModel.hiddenQuotaSourceIDs,
+                loginItemRequiresApproval: loginItemController.requiresApproval,
+                loginItemError: loginItemController.errorDescription,
+                onOpenLoginItemSettings: { loginItemController.openSystemSettings() },
                 currentVersion: updateController.currentVersion,
                 canCheckForUpdates: updateController.canCheckForUpdates,
                 onCheckForUpdates: { updateController.checkForUpdates() }
             )
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active {
+                loginItemController.refresh()
+            }
         }
     }
 }
