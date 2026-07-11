@@ -3,7 +3,6 @@ import SwiftUI
 import VibeUsageAdapter
 import VibeUsageAggregation
 import VibeUsageCore
-import VibeUsageQuota
 import VibeUsageUI
 
 @main
@@ -11,58 +10,18 @@ import VibeUsageUI
 struct VibeUsagePreviewRenderer {
     static func main() throws {
         let arguments = Array(CommandLine.arguments.dropFirst())
-        let isDashboard = arguments.contains("--dashboard")
-        let isShareCard = arguments.contains("--share-card")
         let isShareCardSparse = arguments.contains("--share-card-sparse")
-        let isDark = arguments.contains("--dark")
         let outputPath = arguments.first(where: { !$0.hasPrefix("--") })
-            ?? ((isShareCard || isShareCardSparse) ? "docs/usage-share-preview.png" : (isDashboard ? "dashboard-preview.png" : "docs/usage-share-preview.png"))
+            ?? "docs/usage-share-preview.png"
 
-        if isShareCardSparse {
-            try renderShareCard(outputPath: outputPath, isDark: isDark, sparse: true)
-        } else if isShareCard {
-            try renderShareCard(outputPath: outputPath, isDark: isDark, sparse: false)
-        } else if isDashboard {
-            try renderDashboard(outputPath: outputPath, isDark: isDark)
-        } else {
-            try renderShareCard(outputPath: outputPath, isDark: isDark, sparse: false)
-        }
-    }
-
-    // MARK: - Dashboard preview
-
-    private static func renderDashboard(outputPath: String, isDark: Bool) throws {
-        let snapshot = makeDashboardSnapshot()
-        let quota = makeQuotaSnapshot()
-        let size = NSSize(width: 1040, height: 1600)
-
-        let view = ZStack(alignment: .top) {
-            Color(nsColor: .windowBackgroundColor)
-            DashboardWindowView(
-                snapshot: snapshot,
-                isLoading: false,
-                quota: quota,
-                selectedRange: .constant(.last30Days),
-                onRangeChange: {},
-                onRefresh: {}
-            )
-        }
-        .frame(width: size.width, height: size.height, alignment: .top)
-        .environment(\.locale, Locale(identifier: "zh_Hans_CN"))
-        .environment(\.colorScheme, isDark ? .dark : .light)
-        .preferredColorScheme(isDark ? .dark : .light)
-
-        try renderPNG(view: view, size: size, scale: 2, outputPath: outputPath, dark: isDark)
+        try renderShareCard(outputPath: outputPath, sparse: isShareCardSparse)
     }
 
     // MARK: - Share card preview
 
-    /// The share card is a single fixed dark-poster design regardless of
-    /// system appearance, so `isDark` is a no-op here (kept only so the
-    /// `--dark` flag remains harmless to pass); the card always renders at
-    /// its fixed `DashboardShareCard.width` x `.height` size, never measured
-    /// from fitting content.
-    private static func renderShareCard(outputPath: String, isDark: Bool, sparse: Bool) throws {
+    /// The share card is a fixed dark-poster design rendered at its explicit
+    /// size, never measured from fitting content.
+    private static func renderShareCard(outputPath: String, sparse: Bool) throws {
         let snapshot = sparse ? makeSparseShareCardSnapshot() : makeDashboardSnapshot()
         let size = NSSize(width: DashboardShareCard.width, height: DashboardShareCard.height)
 
@@ -232,62 +191,6 @@ struct VibeUsagePreviewRenderer {
 private enum RenderError: Error {
     case bitmapAllocationFailed
     case pngEncodingFailed
-}
-
-// MARK: - Quota mock data
-
-/// Claude `.ok` with three windows spanning all three tint thresholds
-/// (green/amber/red) and Codex `.notConnected` to show a non-ok state renders
-/// cleanly alongside a populated one.
-private func makeQuotaSnapshot() -> QuotaSnapshot {
-    let now = fixedDate()
-
-    let claudeWindows: [QuotaWindow] = [
-        QuotaWindow(
-            id: "five_hour",
-            label: VibeUsageStrings.text(zh: "5 小时额度", en: "5-Hour Quota"),
-            usedFraction: 0.62,
-            usedPercentText: "62%",
-            resetsAt: now.addingTimeInterval(2 * 3600 + 18 * 60),
-            resetCountdownText: QuotaFormatting.countdownText(resetsAt: now.addingTimeInterval(2 * 3600 + 18 * 60), now: now)
-        ),
-        QuotaWindow(
-            id: "seven_day",
-            label: VibeUsageStrings.text(zh: "7 日额度", en: "7-Day Quota"),
-            usedFraction: 0.78,
-            usedPercentText: "78%",
-            resetsAt: now.addingTimeInterval(3 * 86400 + 4 * 3600),
-            resetCountdownText: QuotaFormatting.countdownText(resetsAt: now.addingTimeInterval(3 * 86400 + 4 * 3600), now: now)
-        ),
-        QuotaWindow(
-            id: "seven_day_opus",
-            label: VibeUsageStrings.text(zh: "7 日 Opus 额度", en: "7-Day Opus Quota"),
-            usedFraction: 0.91,
-            usedPercentText: "91%",
-            resetsAt: now.addingTimeInterval(3 * 86400 + 4 * 3600),
-            resetCountdownText: QuotaFormatting.countdownText(resetsAt: now.addingTimeInterval(3 * 86400 + 4 * 3600), now: now)
-        )
-    ]
-
-    return QuotaSnapshot(
-        sources: [
-            QuotaSourceSnapshot(sourceID: .claudeCode, displayName: "Claude", state: .ok(claudeWindows), fetchedAt: now, subscriptionTier: "max"),
-            QuotaSourceSnapshot(sourceID: .codexCLI, displayName: "Codex", state: .notConnected, fetchedAt: now)
-        ],
-        generatedAt: now
-    )
-}
-
-private func fixedDate() -> Date {
-    var components = DateComponents()
-    components.calendar = Calendar(identifier: .gregorian)
-    components.timeZone = TimeZone(secondsFromGMT: 8 * 3600)
-    components.year = 2026
-    components.month = 7
-    components.day = 2
-    components.hour = 16
-    components.minute = 3
-    return components.date ?? Date()
 }
 
 // MARK: - Dashboard mock data (deliberately messy, mirrors real-world data)

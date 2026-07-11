@@ -382,16 +382,44 @@ public final class UsageAggregationService: Sendable {
         )
     }
 
-    /// Snapshot backing the dashboard window: daily trend, project rollups,
-    /// and recent sessions for `range`, scoped to `visibleSourceFilter`
-    /// (typically "discovered minus hidden") and `modelFilter`.
+    /// Detailed snapshot backing share-poster exports: daily trend, project
+    /// rollups, models and sources for `range`.
     public func insightsSnapshot(
         visibleSourceFilter: Set<AgentSourceID>,
         modelFilter: Set<String> = [],
         range: UsageInsightsRange,
         now: Date = Date()
     ) throws -> UsageInsightsSnapshot {
-        let bounds = Self.dayBounds(for: range, now: now)
+        try insightsSnapshot(
+            visibleSourceFilter: visibleSourceFilter,
+            modelFilter: modelFilter,
+            bounds: Self.dayBounds(for: range, now: now),
+            now: now
+        )
+    }
+
+    /// Snapshot used for sharing the menu bar's current view. Accepts every
+    /// menu preset, including Yesterday and This Week.
+    public func insightsSnapshot(
+        visibleSourceFilter: Set<AgentSourceID>,
+        modelFilter: Set<String> = [],
+        dateRange: UsageDateRangePreset,
+        now: Date = Date()
+    ) throws -> UsageInsightsSnapshot {
+        try insightsSnapshot(
+            visibleSourceFilter: visibleSourceFilter,
+            modelFilter: modelFilter,
+            bounds: Self.dayBounds(dateRange: dateRange, daysBack: 30, now: now),
+            now: now
+        )
+    }
+
+    private func insightsSnapshot(
+        visibleSourceFilter: Set<AgentSourceID>,
+        modelFilter: Set<String>,
+        bounds: (start: Date, end: Date),
+        now: Date
+    ) throws -> UsageInsightsSnapshot {
         let start = Date.vibeUsageDayString(bounds.start)
         let end = Date.vibeUsageDayString(bounds.end)
 

@@ -17,40 +17,33 @@ struct VibeUsageApp: App {
         MenuBarExtra {
             MenuContentView(viewModel: viewModel, updateController: updateController)
         } label: {
-            if let todaySpendMenuText = viewModel.todaySpendMenuText {
-                Label(todaySpendMenuText, systemImage: "chart.bar.xaxis")
+            if let menuBarMetricText = viewModel.menuBarMetricText {
+                Label(menuBarMetricText, systemImage: "chart.bar.xaxis")
             } else {
                 Image(systemName: "chart.bar.xaxis")
             }
         }
         .menuBarExtraStyle(.window)
 
-        Window(dashboardWindowTitle, id: "dashboard") {
-            DashboardWindowView(
-                snapshot: viewModel.insights,
-                isLoading: viewModel.isLoadingInsights,
-                quota: viewModel.quota,
-                quotaConnectUIStates: viewModel.quotaConnectUIStates,
-                selectedRange: $viewModel.insightsRange,
-                onRangeChange: { viewModel.reloadInsights() },
-                onRefresh: { viewModel.refresh() },
-                onQuotaConnect: { viewModel.connectQuota($0) },
-                onQuotaDisconnect: { viewModel.disconnectQuota($0) },
-                onQuotaCancelConnect: { viewModel.cancelQuotaConnect($0) }
+        Settings {
+            VibeUsageSettingsView(
+                configurableAgentSources: viewModel.configurableAgentSources,
+                menuBarMetricMode: $viewModel.menuBarMetricMode,
+                hiddenMenuBarMetricSourceIDs: $viewModel.hiddenMenuBarMetricSourceIDs,
+                hiddenDropdownSourceIDs: $viewModel.hiddenAgentSourceIDs,
+                enablesLimitMonitoring: $viewModel.enablesLimitMonitoring,
+                hiddenQuotaSourceIDs: $viewModel.hiddenQuotaSourceIDs,
+                canCheckForUpdates: updateController.canCheckForUpdates,
+                onCheckForUpdates: { updateController.checkForUpdates() }
             )
         }
     }
 }
 
-private let dashboardWindowTitle = VibeUsageStrings.text(zh: "用量控制台", en: "Usage Console")
-
-/// Thin wrapper so `\.openWindow` (only available inside scene content, not
-/// on the `App` itself) can be read for the "open console" button in the
-/// menu bar view.
 private struct MenuContentView: View {
     @ObservedObject var viewModel: AppViewModel
     @ObservedObject var updateController: SparkleUpdateController
-    @Environment(\.openWindow) private var openWindow
+    @Environment(\.openSettings) private var openSettings
 
     var body: some View {
         if let startupError = viewModel.startupError {
@@ -58,23 +51,18 @@ private struct MenuContentView: View {
         } else {
             MenuBarUsageView(
                 snapshot: viewModel.snapshot,
+                shareSnapshot: viewModel.shareSnapshot,
                 isRefreshing: viewModel.isRefreshing,
                 lastError: viewModel.lastError,
-                configurableAgentSources: viewModel.configurableAgentSources,
-                hiddenAgentSourceIDs: viewModel.hiddenAgentSourceIDs,
-                quota: viewModel.quota,
+                quota: viewModel.enablesLimitMonitoring ? viewModel.quota : .empty,
                 quotaConnectUIStates: viewModel.quotaConnectUIStates,
                 selectedDateRange: $viewModel.selectedDateRange,
                 selectedModelFilter: $viewModel.selectedModelFilter,
-                showsSpendInMenuBar: $viewModel.showsSpendInMenuBar,
-                enablesLimitMonitoring: $viewModel.enablesLimitMonitoring,
+                hiddenQuotaSourceIDs: viewModel.hiddenQuotaSourceIDs,
                 onRefresh: { viewModel.refresh() },
                 onFilterChange: { viewModel.applyFilters() },
-                onAgentDisplayCommit: { hidden in
-                    viewModel.setHiddenAgentSourceIDs(hidden)
-                },
-                onOpenDashboard: {
-                    openWindow(id: "dashboard")
+                onOpenSettings: {
+                    openSettings()
                     NSApp.activate(ignoringOtherApps: true)
                 },
                 onQuit: { NSApp.terminate(nil) },
@@ -97,19 +85,36 @@ final class AppViewModel: ObservableObject {
     @Published var selectedDateRange: UsageDateRangePreset = .today
     @Published var selectedModelFilter: Set<String> = []
     @Published var configurableAgentSources: [AgentSourceDescriptor] = []
-    @Published var hiddenAgentSourceIDs: Set<AgentSourceID>
-    @Published var insights: UsageInsightsSnapshot = .empty()
-    @Published var insightsRange: UsageInsightsRange = .last30Days
-    @Published var isLoadingInsights = false
-    @Published var todaySpendMenuText: String?
-    @Published var showsSpendInMenuBar: Bool {
+    @Published var hiddenAgentSourceIDs: Set<AgentSourceID> {
         didSet {
-            UserDefaults.standard.set(showsSpendInMenuBar, forKey: Self.showsSpendInMenuBarKey)
-            updateTodaySpendMenuText()
+            Self.saveSourceIDs(hiddenAgentSourceIDs, key: Self.hiddenAgentSourceIDsKey)
+            guard !isInitializing else { return }
+            applyFilters()
         }
     }
+    @Published var menuBarMetricMode: MenuBarMetricMode {
+        didSet {
+            UserDefaults.standard.set(menuBarMetricMode.rawValue, forKey: Self.menuBarMetricModeKey)
+            guard !isInitializing else { return }
+            reloadMenuBarMetric()
+        }
+    }
+    @Published var hiddenMenuBarMetricSourceIDs: Set<AgentSourceID> {
+        didSet {
+            Self.saveSourceIDs(hiddenMenuBarMetricSourceIDs, key: Self.hiddenMenuBarMetricSourceIDsKey)
+            guard !isInitializing else { return }
+            reloadMenuBarMetric()
+        }
+    }
+    @Published var menuBarMetricText: String?
+    @Published var shareSnapshot: UsageInsightsSnapshot
     @Published var quota: QuotaSnapshot = .empty
     @Published var quotaConnectUIStates: [AgentSourceID: QuotaConnectUIState] = [:]
+    @Published var hiddenQuotaSourceIDs: Set<AgentSourceID> {
+        didSet {
+            Self.saveHiddenQuotaSourceIDs(hiddenQuotaSourceIDs)
+        }
+    }
     @Published var enablesLimitMonitoring: Bool {
         didSet {
             UserDefaults.standard.set(enablesLimitMonitoring, forKey: Self.enablesLimitMonitoringKey)
@@ -126,7 +131,6 @@ final class AppViewModel: ObservableObject {
     private var locallyDiscoveredSourceIDs = Set<AgentSourceID>()
     private var autoRefreshCoordinator: UsageAutoRefreshCoordinator?
     private var pendingRefresh = false
-    private var lastTodaySpend: Decimal?
     private var quotaRefreshTimer: Timer?
     private var isInitializing = true
 
@@ -140,9 +144,13 @@ final class AppViewModel: ObservableObject {
 
         self.allSourceDescriptors = registry.descriptors
         self.hiddenAgentSourceIDs = Self.loadHiddenAgentSourceIDs()
-        self.showsSpendInMenuBar = Self.loadShowsSpendInMenuBar()
+        self.hiddenMenuBarMetricSourceIDs = Self.loadSourceIDs(key: Self.hiddenMenuBarMetricSourceIDsKey)
+        self.hiddenQuotaSourceIDs = Self.loadHiddenQuotaSourceIDs()
+        self.menuBarMetricMode = Self.loadMenuBarMetricMode()
         self.enablesLimitMonitoring = Self.loadEnablesLimitMonitoring()
         self.snapshot = .empty()
+        self.shareSnapshot = .empty()
+        self.menuBarMetricText = nil
 
         let enablesLimitMonitoringKey = Self.enablesLimitMonitoringKey
         let capturedEnablesLimitMonitoring: @Sendable () -> Bool = {
@@ -241,12 +249,6 @@ final class AppViewModel: ObservableObject {
         quotaRefreshTimer = timer
     }
 
-    func setHiddenAgentSourceIDs(_ hiddenSourceIDs: Set<AgentSourceID>) {
-        hiddenAgentSourceIDs = hiddenSourceIDs
-        Self.saveHiddenAgentSourceIDs(hiddenAgentSourceIDs)
-        applyFilters()
-    }
-
     func refresh() {
         refreshQuota()
         guard ingestor != nil else { return }
@@ -282,8 +284,8 @@ final class AppViewModel: ObservableObject {
                     locallyDiscoveredSourceIDs = summary.discoveredSourceIDs
                     configurableAgentSources = configurableSources
                     snapshot = next
-                    reloadInsights()
-                    reloadTodaySpend()
+                    reloadShareSnapshot()
+                    reloadMenuBarMetric()
                     finishRefreshCycle()
                 }
             } catch {
@@ -315,62 +317,52 @@ final class AppViewModel: ObservableObject {
                 dateRange: selectedDateRange
             )
             lastError = nil
+            reloadShareSnapshot()
         } catch {
             lastError = error.localizedDescription
         }
     }
 
-    func reloadInsights() {
+    private func reloadShareSnapshot() {
         guard let aggregation else { return }
-        isLoadingInsights = true
-        defer { isLoadingInsights = false }
         do {
-            insights = try aggregation.insightsSnapshot(
+            shareSnapshot = try aggregation.insightsSnapshot(
                 visibleSourceFilter: Self.visibleSourceIDs(
                     discovered: locallyDiscoveredSourceIDs,
                     hidden: hiddenAgentSourceIDs
                 ),
-                modelFilter: [],
-                range: insightsRange
+                modelFilter: selectedModelFilter,
+                dateRange: selectedDateRange
             )
         } catch {
             lastError = error.localizedDescription
         }
     }
 
-    private func reloadTodaySpend() {
+    private func reloadMenuBarMetric() {
+        guard menuBarMetricMode != .hidden else {
+            menuBarMetricText = nil
+            return
+        }
         guard let aggregation else { return }
         do {
             let todaySnapshot = try aggregation.dashboardSnapshot(
                 visibleSourceFilter: Self.visibleSourceIDs(
                     discovered: locallyDiscoveredSourceIDs,
-                    hidden: hiddenAgentSourceIDs
+                    hidden: hiddenMenuBarMetricSourceIDs
                 ),
                 dateRange: .today
             )
-            lastTodaySpend = todaySnapshot.totals.costUSD
+            menuBarMetricText = MenuBarMetricFormatter.text(
+                for: menuBarMetricMode,
+                totals: todaySnapshot.totals
+            )
         } catch {
-            lastTodaySpend = nil
+            menuBarMetricText = MenuBarMetricFormatter.text(
+                for: menuBarMetricMode,
+                totals: UsageTotals()
+            )
         }
-        updateTodaySpendMenuText()
-    }
-
-    private func updateTodaySpendMenuText() {
-        guard showsSpendInMenuBar, let spend = lastTodaySpend, spend > 0 else {
-            todaySpendMenuText = nil
-            return
-        }
-        todaySpendMenuText = Self.formatMenuBarSpend(spend)
-    }
-
-    private static func formatMenuBarSpend(_ amount: Decimal) -> String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .currency
-        formatter.currencyCode = "USD"
-        formatter.currencySymbol = "$"
-        formatter.maximumFractionDigits = amount < 100 ? 1 : 0
-        formatter.minimumFractionDigits = 0
-        return formatter.string(from: amount as NSDecimalNumber) ?? "$0"
     }
 
     private static func visibleSourceIDs(
@@ -388,24 +380,42 @@ final class AppViewModel: ObservableObject {
     }
 
     private static let hiddenAgentSourceIDsKey = "hiddenAgentSourceIDs"
+    private static let hiddenMenuBarMetricSourceIDsKey = "hiddenMenuBarMetricSourceIDs"
+    private static let hiddenQuotaSourceIDsKey = "hiddenQuotaSourceIDs"
+    private static let menuBarMetricModeKey = "menuBarMetricMode"
     private static let showsSpendInMenuBarKey = "showsSpendInMenuBar"
     private static let enablesLimitMonitoringKey = "enablesLimitMonitoring"
 
     private static func loadHiddenAgentSourceIDs() -> Set<AgentSourceID> {
-        let rawValues = UserDefaults.standard.stringArray(forKey: hiddenAgentSourceIDsKey) ?? []
-        return Set(rawValues.map { AgentSourceID(rawValue: $0) })
+        loadSourceIDs(key: hiddenAgentSourceIDsKey)
     }
 
-    private static func loadShowsSpendInMenuBar() -> Bool {
-        UserDefaults.standard.object(forKey: showsSpendInMenuBarKey) as? Bool ?? true
+    private static func loadMenuBarMetricMode() -> MenuBarMetricMode {
+        MenuBarMetricMode.resolve(
+            storedRawValue: UserDefaults.standard.string(forKey: menuBarMetricModeKey),
+            legacyShowsSpend: UserDefaults.standard.object(forKey: showsSpendInMenuBarKey) as? Bool
+        )
+    }
+
+    private static func loadHiddenQuotaSourceIDs() -> Set<AgentSourceID> {
+        loadSourceIDs(key: hiddenQuotaSourceIDsKey)
     }
 
     private static func loadEnablesLimitMonitoring() -> Bool {
         UserDefaults.standard.object(forKey: enablesLimitMonitoringKey) as? Bool ?? true
     }
 
-    private static func saveHiddenAgentSourceIDs(_ ids: Set<AgentSourceID>) {
-        UserDefaults.standard.set(ids.map(\.rawValue).sorted(), forKey: hiddenAgentSourceIDsKey)
+    private static func saveHiddenQuotaSourceIDs(_ ids: Set<AgentSourceID>) {
+        saveSourceIDs(ids, key: hiddenQuotaSourceIDsKey)
+    }
+
+    private static func loadSourceIDs(key: String) -> Set<AgentSourceID> {
+        let rawValues = UserDefaults.standard.stringArray(forKey: key) ?? []
+        return Set(rawValues.map { AgentSourceID(rawValue: $0) })
+    }
+
+    private static func saveSourceIDs(_ ids: Set<AgentSourceID>, key: String) {
+        UserDefaults.standard.set(ids.map(\.rawValue).sorted(), forKey: key)
     }
 }
 

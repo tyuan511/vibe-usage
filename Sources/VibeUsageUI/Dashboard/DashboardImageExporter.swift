@@ -3,7 +3,7 @@ import SwiftUI
 import VibeUsageAggregation
 
 /// Renders `DashboardShareCard` to PNG data for saving/copying/sharing from
-/// the dashboard window. Uses the same offscreen-render technique as
+/// the menu bar. Uses the same offscreen-render technique as
 /// `VibeUsagePreviewRenderer` (NSHostingView hosted in a borderless NSWindow
 /// with an explicit `NSAppearance`, drawn via `performAsCurrentDrawingAppearance`
 /// + `cacheDisplay`): AppKit dynamic colors (`windowBackgroundColor`,
@@ -21,20 +21,16 @@ public enum DashboardImageExporter {
     ///
     /// The share card is a single fixed dark-poster design (Wrapped-style),
     /// independent of system appearance, so it is always rendered with a
-    /// `.darkAqua` `NSAppearance` regardless of `darkMode`. The parameter is
-    /// kept (rather than removed) purely so this remains a source-compatible,
-    /// no-behavior-change drop-in for callers that still pass the caller's
-    /// current appearance; it has no effect on the rendered output.
+    /// `.darkAqua` `NSAppearance`.
     public static func renderPNGData(
         snapshot: UsageInsightsSnapshot,
         rangeTitle: String,
-        darkMode: Bool,
         scale: CGFloat = 2
     ) -> Data? {
         let card = DashboardShareCard(snapshot: snapshot, rangeTitle: rangeTitle)
         let size = NSSize(width: DashboardShareCard.width, height: DashboardShareCard.height)
 
-        return renderPNG(view: card, size: size, scale: scale, dark: true)
+        return renderPNG(view: card, size: size, scale: scale)
     }
 
     // MARK: - Shared render/encode plumbing (mirrors VibeUsagePreviewRenderer)
@@ -42,12 +38,11 @@ public enum DashboardImageExporter {
     private static func renderPNG(
         view: some View,
         size: NSSize,
-        scale: CGFloat,
-        dark: Bool
+        scale: CGFloat
     ) -> Data? {
         let hostingView = NSHostingView(rootView: view)
         hostingView.frame = NSRect(origin: .zero, size: size)
-        let appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
+        let appearance = NSAppearance(named: .darkAqua)
         hostingView.appearance = appearance
 
         // AppKit dynamic colors resolve against the containing window's

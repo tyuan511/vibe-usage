@@ -112,6 +112,10 @@ let package = Package(
                 .copy("Resources/AgentIcons")
             ]
         ),
+        .testTarget(
+            name: "VibeUsageUITests",
+            dependencies: ["VibeUsageUI"]
+        ),
 
         // MARK: - App (composition root: only place that imports concrete adapters)
         .executableTarget(

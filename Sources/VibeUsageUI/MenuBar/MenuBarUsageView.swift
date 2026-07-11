@@ -6,45 +6,38 @@ import VibeUsageQuota
 
 public struct MenuBarUsageView: View {
     let snapshot: UsageDashboardSnapshot
+    let shareSnapshot: UsageInsightsSnapshot
     let isRefreshing: Bool
     let lastError: String?
-    let configurableAgentSources: [AgentSourceDescriptor]
-    let hiddenAgentSourceIDs: Set<AgentSourceID>
     let quota: QuotaSnapshot
     let quotaConnectUIStates: [AgentSourceID: QuotaConnectUIState]
     @Binding var selectedDateRange: UsageDateRangePreset
     @Binding var selectedModelFilter: Set<String>
-    @Binding var showsSpendInMenuBar: Bool
-    @Binding var enablesLimitMonitoring: Bool
+    let hiddenQuotaSourceIDs: Set<AgentSourceID>
     let onRefresh: () -> Void
     let onFilterChange: () -> Void
-    let onAgentDisplayCommit: (_ hiddenSourceIDs: Set<AgentSourceID>) -> Void
-    let onOpenDashboard: () -> Void
+    let onOpenSettings: () -> Void
     let onQuit: () -> Void
     let canCheckForUpdates: Bool
     let onCheckForUpdates: () -> Void
     let onQuotaConnect: (AgentSourceID) -> Void
     let onQuotaDisconnect: (AgentSourceID) -> Void
     let onQuotaCancelConnect: (AgentSourceID) -> Void
-    @State private var showsAgentSettings = false
-    @State private var draftHiddenAgentSourceIDs = Set<AgentSourceID>()
+    @State private var shareAnchorView: NSView?
 
     public init(
         snapshot: UsageDashboardSnapshot,
+        shareSnapshot: UsageInsightsSnapshot,
         isRefreshing: Bool,
         lastError: String?,
-        configurableAgentSources: [AgentSourceDescriptor],
-        hiddenAgentSourceIDs: Set<AgentSourceID>,
         quota: QuotaSnapshot,
         quotaConnectUIStates: [AgentSourceID: QuotaConnectUIState] = [:],
         selectedDateRange: Binding<UsageDateRangePreset>,
         selectedModelFilter: Binding<Set<String>>,
-        showsSpendInMenuBar: Binding<Bool>,
-        enablesLimitMonitoring: Binding<Bool>,
+        hiddenQuotaSourceIDs: Set<AgentSourceID>,
         onRefresh: @escaping () -> Void,
         onFilterChange: @escaping () -> Void,
-        onAgentDisplayCommit: @escaping (Set<AgentSourceID>) -> Void,
-        onOpenDashboard: @escaping () -> Void,
+        onOpenSettings: @escaping () -> Void,
         onQuit: @escaping () -> Void,
         canCheckForUpdates: Bool = false,
         onCheckForUpdates: @escaping () -> Void = {},
@@ -53,20 +46,17 @@ public struct MenuBarUsageView: View {
         onQuotaCancelConnect: @escaping (AgentSourceID) -> Void = { _ in }
     ) {
         self.snapshot = snapshot
+        self.shareSnapshot = shareSnapshot
         self.isRefreshing = isRefreshing
         self.lastError = lastError
-        self.configurableAgentSources = configurableAgentSources
-        self.hiddenAgentSourceIDs = hiddenAgentSourceIDs
         self.quota = quota
         self.quotaConnectUIStates = quotaConnectUIStates
         self._selectedDateRange = selectedDateRange
         self._selectedModelFilter = selectedModelFilter
-        self._showsSpendInMenuBar = showsSpendInMenuBar
-        self._enablesLimitMonitoring = enablesLimitMonitoring
+        self.hiddenQuotaSourceIDs = hiddenQuotaSourceIDs
         self.onRefresh = onRefresh
         self.onFilterChange = onFilterChange
-        self.onAgentDisplayCommit = onAgentDisplayCommit
-        self.onOpenDashboard = onOpenDashboard
+        self.onOpenSettings = onOpenSettings
         self.onQuit = onQuit
         self.canCheckForUpdates = canCheckForUpdates
         self.onCheckForUpdates = onCheckForUpdates
@@ -102,9 +92,11 @@ public struct MenuBarUsageView: View {
                 generatedAt: snapshot.generatedAt
             )
 
-            VStack(alignment: .leading, spacing: 7) {
-                agentsHeader
-                agentsList
+            if !snapshot.sources.isEmpty {
+                VStack(alignment: .leading, spacing: 7) {
+                    MenuSectionTitle(UIStrings.agents)
+                    agentsList
+                }
             }
 
             VStack(alignment: .leading, spacing: 7) {
@@ -146,8 +138,11 @@ public struct MenuBarUsageView: View {
                 HStack(spacing: 7) {
                     dateRangeMenu
 
-                    Button(action: onOpenDashboard) {
-                        Image(systemName: "chart.xyaxis.line")
+                    shareMenu
+                        .background(ShareAnchorCapture(anchorView: $shareAnchorView))
+
+                    Button(action: onOpenSettings) {
+                        Image(systemName: "gearshape")
                             .font(.system(size: 13, weight: .medium))
                             .foregroundStyle(Color(nsColor: .secondaryLabelColor))
                             .frame(width: 18, height: 18)
@@ -155,7 +150,7 @@ public struct MenuBarUsageView: View {
                     .buttonStyle(.plain)
                     .controlSize(.small)
                     .frame(width: 28, height: 28)
-                    .help(UIStrings.text(zh: "打开控制台", en: "Open Console"))
+                    .help(UIStrings.text(zh: "设置", en: "Settings"))
 
                     Button(action: onRefresh) {
                         Image(systemName: isRefreshing ? "hourglass" : "arrow.clockwise")
@@ -168,19 +163,71 @@ public struct MenuBarUsageView: View {
                     .frame(width: 28, height: 28)
                     .disabled(isRefreshing)
                     .help(UIStrings.refresh)
-
-                    Button(action: onQuit) {
-                        Image(systemName: "power")
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundStyle(Color(nsColor: .secondaryLabelColor))
-                            .frame(width: 18, height: 18)
-                    }
-                    .buttonStyle(.plain)
-                    .controlSize(.small)
-                    .frame(width: 28, height: 28)
-                    .help(UIStrings.text(zh: "退出 VibeUsage", en: "Quit VibeUsage"))
                 }
             }
+        }
+    }
+
+    private var shareMenu: some View {
+        Menu {
+            Button(UIStrings.text(zh: "保存图片…", en: "Save Image…"), action: saveImage)
+            Button(UIStrings.text(zh: "拷贝图片", en: "Copy Image"), action: copyImage)
+            Button(UIStrings.text(zh: "分享…", en: "Share…"), action: shareImage)
+        } label: {
+            Image(systemName: "square.and.arrow.up")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(Color(nsColor: .secondaryLabelColor))
+                .frame(width: 18, height: 18)
+        }
+        .menuIndicator(.hidden)
+        .buttonStyle(.plain)
+        .controlSize(.small)
+        .frame(width: 28, height: 28)
+        .disabled(shareSnapshot.totals.eventCount == 0)
+        .help(UIStrings.text(zh: "导出图片", en: "Export image"))
+    }
+
+    private func exportPNGData() -> Data? {
+        DashboardImageExporter.renderPNGData(
+            snapshot: shareSnapshot,
+            rangeTitle: selectedDateRange.displayName
+        )
+    }
+
+    private func saveImage() {
+        guard let data = exportPNGData() else { return }
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.png]
+        panel.nameFieldStringValue = "VibeUsage-\(shareSnapshot.rangeEndDay).png"
+        panel.begin { response in
+            guard response == .OK, let url = panel.url else { return }
+            try? data.write(to: url)
+        }
+    }
+
+    private func copyImage() {
+        guard let data = exportPNGData() else { return }
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setData(data, forType: .png)
+        if let image = NSImage(data: data), let tiffData = image.tiffRepresentation {
+            pasteboard.setData(tiffData, forType: .tiff)
+        }
+    }
+
+    private func shareImage() {
+        guard let data = exportPNGData(), let image = NSImage(data: data) else { return }
+        let picker = NSSharingServicePicker(items: [image])
+        if let anchorView = shareAnchorView {
+            picker.show(relativeTo: anchorView.bounds, of: anchorView, preferredEdge: .minY)
+        } else if let contentView = NSApp.keyWindow?.contentView {
+            let topRight = NSRect(
+                x: contentView.bounds.maxX - 1,
+                y: contentView.bounds.maxY - 1,
+                width: 1,
+                height: 1
+            )
+            picker.show(relativeTo: topRight, of: contentView, preferredEdge: .minY)
         }
     }
 
@@ -188,13 +235,20 @@ public struct MenuBarUsageView: View {
         Dictionary(uniqueKeysWithValues: snapshot.discoveredSources.map { ($0.id, $0) })
     }
 
+    private var visibleQuotaSources: [QuotaSourceSnapshot] {
+        QuotaDisplayFilter.visibleSources(
+            from: quota.sources,
+            hiddenSourceIDs: hiddenQuotaSourceIDs
+        )
+    }
+
     @ViewBuilder
     private var quotaSection: some View {
-        if !quota.sources.isEmpty {
+        if !visibleQuotaSources.isEmpty {
             VStack(alignment: .leading, spacing: 7) {
                 MenuSectionTitle(QuotaUIStrings.sectionTitle)
                 VStack(alignment: .leading, spacing: 10) {
-                    ForEach(Array(quota.sources.enumerated()), id: \.element.id) { index, source in
+                    ForEach(Array(visibleQuotaSources.enumerated()), id: \.element.id) { index, source in
                         QuotaSourceRow(
                             snapshot: source,
                             descriptor: descriptorsByID[source.sourceID],
@@ -203,7 +257,7 @@ public struct MenuBarUsageView: View {
                             onDisconnect: onQuotaDisconnect,
                             onCancelConnect: onQuotaCancelConnect
                         )
-                        if index < quota.sources.count - 1 {
+                        if index < visibleQuotaSources.count - 1 {
                             Divider()
                         }
                     }
@@ -301,64 +355,17 @@ public struct MenuBarUsageView: View {
         .padding(8)
     }
 
-    private var agentsHeader: some View {
-        HStack(alignment: .center) {
-            MenuSectionTitle(UIStrings.agents)
-            Spacer()
-            Button {
-                toggleAgentSettings()
-            } label: {
-                if showsAgentSettings {
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 12, weight: .semibold))
-                } else {
-                    Image(systemName: "gearshape")
-                        .font(.system(size: 12, weight: .medium))
-                }
-            }
-            .buttonStyle(.borderless)
-            .controlSize(.small)
-            .help(showsAgentSettings ? UIStrings.done : UIStrings.text(zh: "显示设置", en: "Display Settings"))
-        }
-    }
-
-    @ViewBuilder
     private var agentsList: some View {
-        if showsAgentSettings {
-            VStack(alignment: .leading, spacing: 7) {
-                showsSpendInMenuBarRow
-                enablesLimitMonitoringRow
-
-                if configurableAgentSources.isEmpty {
-                    MenuEmptyState(text: UIStrings.text(zh: "没有本地 Agent", en: "No local agents"))
-                } else {
-                    VStack(spacing: 0) {
-                        ForEach(Array(configurableAgentSources.enumerated()), id: \.element.id) { index, descriptor in
-                            agentSettingsRow(for: descriptor)
-                            if index < configurableAgentSources.count - 1 {
-                                Divider().padding(.leading, 26)
-                            }
-                        }
-                    }
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 12))
+        VStack(spacing: 0) {
+            ForEach(Array(snapshot.sources.enumerated()), id: \.element.id) { index, source in
+                SourceMetricRow(source: source)
+                if index < snapshot.sources.count - 1 {
+                    Divider().padding(.leading, 26)
                 }
             }
-        } else if snapshot.sources.isEmpty {
-            MenuEmptyState(text: UIStrings.text(zh: "暂无 Agent 数据", en: "No agent data"))
-        } else {
-            VStack(spacing: 0) {
-                ForEach(Array(snapshot.sources.enumerated()), id: \.element.id) { index, source in
-                    SourceMetricRow(source: source)
-                    if index < snapshot.sources.count - 1 {
-                        Divider().padding(.leading, 26)
-                    }
-                }
-            }
-            .padding(8)
-            .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 12))
         }
+        .padding(8)
+        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 12))
     }
 
     private var menuFooter: some View {
@@ -377,13 +384,25 @@ public struct MenuBarUsageView: View {
             }
 
             Divider()
-            Button(action: onCheckForUpdates) {
-                Label(UIStrings.checkForUpdates, systemImage: "arrow.triangle.2.circlepath")
-                    .frame(maxWidth: .infinity, alignment: .leading)
+            HStack(spacing: 10) {
+                Button(action: onCheckForUpdates) {
+                    Label(UIStrings.checkForUpdates, systemImage: "arrow.triangle.2.circlepath")
+                }
+                .buttonStyle(.plain)
+                .controlSize(.small)
+                .disabled(!canCheckForUpdates)
+
+                Spacer(minLength: 8)
+
+                Button(action: onQuit) {
+                    Label(
+                        UIStrings.text(zh: "退出", en: "Quit"),
+                        systemImage: "power"
+                    )
+                }
+                .buttonStyle(.plain)
+                .controlSize(.small)
             }
-            .buttonStyle(.plain)
-            .controlSize(.small)
-            .disabled(!canCheckForUpdates)
         }
     }
 
@@ -417,77 +436,20 @@ public struct MenuBarUsageView: View {
             }
         )
     }
+}
 
-    private var showsSpendInMenuBarRow: some View {
-        HStack(spacing: 8) {
-            Text(UIStrings.text(zh: "菜单栏显示今日花费", en: "Show today's spend in menu bar"))
-                .font(.callout)
-                .lineLimit(1)
-            Spacer(minLength: 8)
-            Toggle(isOn: $showsSpendInMenuBar) {
-                EmptyView()
-            }
-            .toggleStyle(.checkbox)
-            .controlSize(.small)
-            .labelsHidden()
-        }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 6)
-        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 12))
+private struct ShareAnchorCapture: NSViewRepresentable {
+    @Binding var anchorView: NSView?
+
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView(frame: .zero)
+        DispatchQueue.main.async { anchorView = view.superview ?? view }
+        return view
     }
 
-    private var enablesLimitMonitoringRow: some View {
-        HStack(spacing: 8) {
-            Text(UIStrings.text(zh: "监控订阅额度（联网）", en: "Monitor subscription limits (network)"))
-                .font(.callout)
-                .lineLimit(1)
-            Spacer(minLength: 8)
-            Toggle(isOn: $enablesLimitMonitoring) {
-                EmptyView()
-            }
-            .toggleStyle(.checkbox)
-            .controlSize(.small)
-            .labelsHidden()
-        }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 6)
-        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 12))
-    }
-
-    private func agentSettingsRow(for descriptor: AgentSourceDescriptor) -> some View {
-        HStack(spacing: 8) {
-            AgentSettingLabel(descriptor: descriptor)
-            Spacer(minLength: 0)
-            Toggle(isOn: draftAgentVisibilityBinding(for: descriptor.id)) {
-                EmptyView()
-            }
-            .toggleStyle(.checkbox)
-            .controlSize(.small)
-            .labelsHidden()
-        }
-        .padding(.vertical, 6)
-    }
-
-    private func draftAgentVisibilityBinding(for sourceID: AgentSourceID) -> Binding<Bool> {
-        Binding(
-            get: { !draftHiddenAgentSourceIDs.contains(sourceID) },
-            set: { isVisible in
-                if isVisible {
-                    draftHiddenAgentSourceIDs.remove(sourceID)
-                } else {
-                    draftHiddenAgentSourceIDs.insert(sourceID)
-                }
-            }
-        )
-    }
-
-    private func toggleAgentSettings() {
-        if showsAgentSettings {
-            showsAgentSettings = false
-            onAgentDisplayCommit(draftHiddenAgentSourceIDs)
-        } else {
-            draftHiddenAgentSourceIDs = hiddenAgentSourceIDs
-            showsAgentSettings = true
+    func updateNSView(_ nsView: NSView, context: Context) {
+        if anchorView == nil {
+            DispatchQueue.main.async { anchorView = nsView.superview ?? nsView }
         }
     }
 }

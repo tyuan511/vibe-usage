@@ -1,10 +1,7 @@
 import SwiftUI
 import VibeUsageCore
 
-/// Shared visual language for the dashboard window: a stable per-source color
-/// palette (so chart/legend/tile colors never reshuffle between refreshes,
-/// unlike Swift Charts' auto-assigned palette) plus the typography scale used
-/// throughout the redesigned layout.
+/// Stable per-source color palette used by the share poster.
 enum DashboardTheme {
     /// Hand-picked hues that stay legible in both light and dark appearances
     /// and are visually distinct from one another at a glance (chart bars,
