@@ -15,7 +15,6 @@ final class AppSyncController: ObservableObject {
                 syncNow()
             } else {
                 stopTimer()
-                debounceTask?.cancel()
                 retryTask?.cancel()
             }
         }
@@ -31,7 +30,6 @@ final class AppSyncController: ObservableObject {
             do {
                 try usageStore.renameLocalDevice(trimmed)
                 reloadDevices()
-                scheduleSync()
             } catch {
                 lastError = error.localizedDescription
             }
@@ -98,7 +96,6 @@ final class AppSyncController: ObservableObject {
     private let httpClient: any SyncHTTPClient
     private let defaults: UserDefaults
     private var timer: Timer?
-    private var debounceTask: Task<Void, Never>?
     private var retryTask: Task<Void, Never>?
     private var retryAttempt = 0
     private var isInitializing = true
@@ -136,7 +133,6 @@ final class AppSyncController: ObservableObject {
 
     deinit {
         timer?.invalidate()
-        debounceTask?.cancel()
         retryTask?.cancel()
     }
 
@@ -217,16 +213,6 @@ final class AppSyncController: ObservableObject {
             lastError = error.localizedDescription
             scheduleRetry()
             throw error
-        }
-    }
-
-    func scheduleSync() {
-        guard isEnabled else { return }
-        debounceTask?.cancel()
-        debounceTask = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(10))
-            guard !Task.isCancelled else { return }
-            self?.syncNow()
         }
     }
 

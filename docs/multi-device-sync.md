@@ -57,10 +57,11 @@ provider.
 
 ## Scheduling and Visibility
 
-The app pulls on startup, synchronizes every 15 minutes, and schedules a
-debounced upload after automatic local ingestion. Manual refresh scans local
-logs before synchronizing. Failures retain cached remote data and retry with
-backoff without blocking local ingestion.
+The app pulls on startup and synchronizes every 15 minutes. Automatic local
+ingestion updates only the local database; it does not trigger a network sync.
+Manual refresh scans local logs before synchronizing, and committing a local
+device-name change triggers one immediate sync. Failures retain cached remote
+data and retry with backoff without blocking local ingestion.
 
 All discovered devices are visible by default. Device visibility is a local UI
 preference that consistently affects the menu-bar total, heatmap, agent/model

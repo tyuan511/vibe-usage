@@ -414,8 +414,6 @@ final class AppViewModel: ObservableObject {
                     } catch {
                         syncError = error.localizedDescription
                     }
-                } else {
-                    syncController?.scheduleSync()
                 }
                 let discoveredSourceIDs = summary.discoveredSourceIDs.union(
                     (try? concreteEventStore?.knownUsageSourceIDs()) ?? []

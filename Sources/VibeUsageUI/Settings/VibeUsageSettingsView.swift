@@ -24,6 +24,8 @@ public struct VibeUsageSettingsView: View {
     @State private var confirmsTargetSwitch = false
     @State private var confirmsRemoveSyncConfiguration = false
     @State private var pendingDeviceDeletion: SyncSettingsPresentation.Device?
+    @State private var deviceNameDraft: String?
+    @FocusState private var isDeviceNameFocused: Bool
 
     public init(
         configurableAgentSources: [AgentSourceDescriptor],
@@ -256,10 +258,20 @@ public struct VibeUsageSettingsView: View {
                 .disabled(!sync.hasConfiguration)
 
             LabeledContent(UIStrings.text(zh: "当前设备", en: "This Device")) {
-                TextField("", text: $sync.deviceName)
+                TextField("", text: Binding(
+                    get: { deviceNameDraft ?? sync.deviceName },
+                    set: { deviceNameDraft = $0 }
+                ))
                     .accessibilityLabel(UIStrings.text(zh: "设备名称", en: "Device Name"))
                     .multilineTextAlignment(.trailing)
                     .frame(width: 220)
+                    .focused($isDeviceNameFocused)
+                    .onSubmit(commitDeviceName)
+                    .onChange(of: isDeviceNameFocused) { wasFocused, isFocused in
+                        if wasFocused && !isFocused {
+                            commitDeviceName()
+                        }
+                    }
             }
 
             HStack {
@@ -387,6 +399,19 @@ public struct VibeUsageSettingsView: View {
                 showsSyncConfiguration = false
             }
         }
+    }
+
+    private func commitDeviceName() {
+        let trimmed = (deviceNameDraft ?? sync.deviceName)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            deviceNameDraft = sync.deviceName
+            return
+        }
+        deviceNameDraft = trimmed
+        guard trimmed != sync.deviceName else { return }
+        sync.deviceName = trimmed
+        syncActions.syncNow()
     }
 
     private func syncDeviceVisibilityBinding(_ id: String) -> Binding<Bool> {
