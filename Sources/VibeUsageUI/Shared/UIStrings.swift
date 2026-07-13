@@ -17,6 +17,7 @@ enum UIStrings {
     static let output = text(zh: "输出", en: "Output")
     static let cacheRead = text(zh: "缓存", en: "Cache Read")
     static let agents = text(zh: "Agents", en: "Agents")
+    static let devices = text(zh: "设备", en: "Devices")
     static let models = text(zh: "模型", en: "Models")
     static let done = text(zh: "完成", en: "Done")
     static let estimatedCost = text(zh: "估算", en: "Est.")

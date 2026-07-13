@@ -92,6 +92,15 @@ public struct MenuBarUsageView: View {
                 generatedAt: snapshot.generatedAt
             )
 
+            if !snapshot.devices.isEmpty {
+                VStack(alignment: .leading, spacing: 7) {
+                    MenuSectionTitle(UIStrings.devices)
+                    ForEach(snapshot.devices) { device in
+                        DeviceMetricRow(device: device)
+                    }
+                }
+            }
+
             if !snapshot.sources.isEmpty {
                 VStack(alignment: .leading, spacing: 7) {
                     MenuSectionTitle(UIStrings.agents)

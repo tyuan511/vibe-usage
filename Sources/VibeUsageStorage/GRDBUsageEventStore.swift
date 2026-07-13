@@ -5,7 +5,7 @@ import VibeUsageCore
 /// GRDB-backed implementation of `UsageEventStore`, plus the raw aggregate
 /// query methods that `VibeUsageAggregation` builds view-model DTOs on top of.
 public final class GRDBUsageEventStore: UsageEventStore, Sendable {
-    private let dbQueue: DatabaseQueue
+    let dbQueue: DatabaseQueue
 
     public init(database: UsageDatabase) {
         self.dbQueue = database.dbQueue
@@ -39,7 +39,10 @@ public final class GRDBUsageEventStore: UsageEventStore, Sendable {
     ) throws {
         try dbQueue.write { db in
             for event in result.events {
-                try Self.upsert(event: event, db: db)
+                let changedDates = try Self.upsert(event: event, db: db)
+                for date in changedDates {
+                    try Self.markSyncDayDirty(for: date, db: db)
+                }
             }
             try Self.upsertFileState(
                 filePath: file.path,
@@ -73,6 +76,7 @@ public final class GRDBUsageEventStore: UsageEventStore, Sendable {
                 record.costUsd = updatedCost
                 record.costIsEstimated = remainsEstimated
                 try record.update(db)
+                try Self.markSyncDayDirty(for: record.timestampUtc, db: db)
                 updatedCount += 1
             }
             return updatedCount
@@ -81,14 +85,22 @@ public final class GRDBUsageEventStore: UsageEventStore, Sendable {
 
     public func resetFile(_ path: String) throws {
         try dbQueue.write { db in
+            let dates = try Date.fetchAll(
+                db,
+                sql: "SELECT timestamp_utc FROM usage_event WHERE source_file_path = ?",
+                arguments: [path]
+            )
             try UsageEventRecord.filter(Column("source_file_path") == path).deleteAll(db)
             try FileParseStateRecord.filter(key: path).deleteAll(db)
+            for date in dates {
+                try Self.markSyncDayDirty(for: date, db: db)
+            }
         }
     }
 
     // MARK: - Upsert internals
 
-    private static func upsert(event: UsageEvent, db: GRDB.Database) throws {
+    private static func upsert(event: UsageEvent, db: GRDB.Database) throws -> [Date] {
         let existing = try UsageEventRecord
             .filter(Column("source_id") == event.sourceID.rawValue)
             .filter(Column("dedup_key") == event.dedupKey)
@@ -96,14 +108,32 @@ public final class GRDBUsageEventStore: UsageEventStore, Sendable {
 
         guard let existing else {
             try UsageEventRecord(event: event).insert(db)
-            return
+            return [event.timestamp]
         }
         guard DedupPolicy.shouldReplace(existing: existing.toUsageEvent(), candidate: event) else {
-            return
+            return []
         }
         var replacement = UsageEventRecord(event: event)
         replacement.id = existing.id
         try replacement.update(db)
+        return [existing.timestampUtc, event.timestamp]
+    }
+
+    private static func markSyncDayDirty(for date: Date, db: GRDB.Database) throws {
+        try db.execute(
+            sql: """
+                INSERT INTO sync_dirty_day(day_utc, revision) VALUES (?, 1)
+                ON CONFLICT(day_utc) DO UPDATE SET revision = revision + 1
+                """,
+            arguments: [utcDayString(date)]
+        )
+    }
+
+    private static func utcDayString(_ date: Date) -> String {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        let parts = calendar.dateComponents([.year, .month, .day], from: date)
+        return String(format: "%04d-%02d-%02d", parts.year ?? 0, parts.month ?? 0, parts.day ?? 0)
     }
 
     private static func upsertFileState(
@@ -137,15 +167,21 @@ public final class GRDBUsageEventStore: UsageEventStore, Sendable {
         sourceFilter: Set<AgentSourceID>,
         startDay: String,
         endDay: String,
-        modelFamilyFilter: Set<String> = []
+        modelFamilyFilter: Set<String> = [],
+        deviceFilter: Set<String> = []
     ) throws -> [DailySourceUsage] {
         try dbQueue.read { db in
-            let sql = Self.dailySummarySQL(sourceFilter: sourceFilter, modelFamilyFilter: modelFamilyFilter)
+            let sql = Self.dailySummarySQL(
+                sourceFilter: sourceFilter,
+                modelFamilyFilter: modelFamilyFilter,
+                deviceFilter: deviceFilter
+            )
             let arguments = Self.rangeArguments(
                 startDay: startDay,
                 endDay: endDay,
                 sourceFilter: sourceFilter,
-                modelFamilyFilter: modelFamilyFilter
+                modelFamilyFilter: modelFamilyFilter,
+                deviceFilter: deviceFilter
             )
             let rows = try Row.fetchAll(db, sql: sql, arguments: arguments)
             return rows.map { row in
@@ -172,15 +208,21 @@ public final class GRDBUsageEventStore: UsageEventStore, Sendable {
         sourceFilter: Set<AgentSourceID>,
         startDay: String,
         endDay: String,
-        modelFamilyFilter: Set<String> = []
+        modelFamilyFilter: Set<String> = [],
+        deviceFilter: Set<String> = []
     ) throws -> [ModelBreakdownRow] {
         try dbQueue.read { db in
-            let sql = Self.modelBreakdownSQL(sourceFilter: sourceFilter, modelFamilyFilter: modelFamilyFilter)
+            let sql = Self.modelBreakdownSQL(
+                sourceFilter: sourceFilter,
+                modelFamilyFilter: modelFamilyFilter,
+                deviceFilter: deviceFilter
+            )
             let arguments = Self.rangeArguments(
                 startDay: startDay,
                 endDay: endDay,
                 sourceFilter: sourceFilter,
-                modelFamilyFilter: modelFamilyFilter
+                modelFamilyFilter: modelFamilyFilter,
+                deviceFilter: deviceFilter
             )
             let rows = try Row.fetchAll(db, sql: sql, arguments: arguments)
             return rows.map { row in
@@ -240,6 +282,53 @@ public final class GRDBUsageEventStore: UsageEventStore, Sendable {
         }
     }
 
+    public func deviceBreakdown(
+        deviceFilter: Set<String>,
+        sourceFilter: Set<AgentSourceID>,
+        startDay: String,
+        endDay: String,
+        modelFamilyFilter: Set<String> = []
+    ) throws -> [DeviceBreakdownRow] {
+        try dbQueue.read { db in
+            let rows = try Row.fetchAll(
+                db,
+                sql: Self.deviceBreakdownSQL(
+                    sourceFilter: sourceFilter,
+                    modelFamilyFilter: modelFamilyFilter,
+                    deviceFilter: deviceFilter
+                ),
+                arguments: Self.rangeArguments(
+                    startDay: startDay,
+                    endDay: endDay,
+                    sourceFilter: sourceFilter,
+                    modelFamilyFilter: modelFamilyFilter,
+                    deviceFilter: deviceFilter
+                )
+            )
+            return rows.map { row in
+                let device = SyncedUsageDevice(
+                    id: row["device_id"],
+                    name: row["display_name"],
+                    lastSyncedAt: row["last_synced_at"],
+                    isLocal: row["is_local"]
+                )
+                return DeviceBreakdownRow(
+                    device: device,
+                    tokens: TokenCounts(
+                        input: row["input"],
+                        output: row["output"],
+                        cacheCreate: row["cacheCreate"],
+                        cacheRead: row["cacheRead"],
+                        reasoning: row["reasoning"]
+                    ),
+                    costUSD: Decimal(row["cost"] as Double),
+                    eventCount: row["eventCount"],
+                    estimatedEventCount: row["estimatedEvents"]
+                )
+            }
+        }
+    }
+
     private static func sourceFilterClause(_ sourceFilter: Set<AgentSourceID>) -> String {
         guard !sourceFilter.isEmpty else { return "" }
         let placeholders = sourceFilter.map { _ in "?" }.joined(separator: ", ")
@@ -252,21 +341,71 @@ public final class GRDBUsageEventStore: UsageEventStore, Sendable {
         return "AND model_family IN (\(placeholders))"
     }
 
+    private static func deviceFilterClause(_ deviceFilter: Set<String>) -> String {
+        guard !deviceFilter.isEmpty else { return "" }
+        let placeholders = deviceFilter.map { _ in "?" }.joined(separator: ", ")
+        return "AND device_id IN (\(placeholders))"
+    }
+
     private static func rangeArguments(
         startDay: String,
         endDay: String,
         sourceFilter: Set<AgentSourceID>,
-        modelFamilyFilter: Set<String>
+        modelFamilyFilter: Set<String>,
+        deviceFilter: Set<String> = []
     ) -> StatementArguments {
         var values: [DatabaseValueConvertible] = [startDay, endDay]
         values.append(contentsOf: sourceFilter.map(\.rawValue).sorted())
         values.append(contentsOf: modelFamilyFilter.sorted())
+        values.append(contentsOf: deviceFilter.sorted())
         return StatementArguments(values)
     }
 
-    private static func dailySummarySQL(sourceFilter: Set<AgentSourceID>, modelFamilyFilter: Set<String>) -> String {
+    private static func allUsageCTE() -> String {
         """
-        SELECT substr(timestamp_utc, 1, 10) AS day,
+        WITH all_usage AS (
+            SELECT (SELECT id FROM local_device WHERE singleton = 1) AS device_id,
+                   timestamp_utc AS hour_utc,
+                   source_id,
+                   model_family,
+                   input_tokens,
+                   output_tokens,
+                   cache_create_tokens,
+                   cache_read_tokens,
+                   reasoning_tokens,
+                   cost_usd,
+                   1 AS event_count,
+                   CASE WHEN cost_is_estimated = 1 THEN 1 ELSE 0 END AS estimated_event_count
+            FROM usage_event
+            UNION ALL
+            SELECT device_id,
+                   hour_utc,
+                   source_id,
+                   model_family,
+                   input_tokens,
+                   output_tokens,
+                   cache_create_tokens,
+                   cache_read_tokens,
+                   reasoning_tokens,
+                   cost_usd,
+                   event_count,
+                   estimated_event_count
+            FROM synced_usage_bucket
+        ), dated_usage AS (
+            SELECT *, strftime('%Y-%m-%d', hour_utc, 'localtime') AS local_day
+            FROM all_usage
+        )
+        """
+    }
+
+    private static func dailySummarySQL(
+        sourceFilter: Set<AgentSourceID>,
+        modelFamilyFilter: Set<String>,
+        deviceFilter: Set<String>
+    ) -> String {
+        """
+        \(allUsageCTE())
+        SELECT local_day AS day,
                source_id,
                SUM(input_tokens) AS input,
                SUM(output_tokens) AS output,
@@ -274,17 +413,23 @@ public final class GRDBUsageEventStore: UsageEventStore, Sendable {
                SUM(cache_read_tokens) AS cacheRead,
                SUM(reasoning_tokens) AS reasoning,
                SUM(cost_usd) AS cost
-        FROM usage_event
-        WHERE substr(timestamp_utc, 1, 10) BETWEEN ? AND ?
+        FROM dated_usage
+        WHERE local_day BETWEEN ? AND ?
         \(sourceFilterClause(sourceFilter))
         \(modelFilterClause(modelFamilyFilter))
+        \(deviceFilterClause(deviceFilter))
         GROUP BY day, source_id
         ORDER BY day
         """
     }
 
-    private static func modelBreakdownSQL(sourceFilter: Set<AgentSourceID>, modelFamilyFilter: Set<String>) -> String {
+    private static func modelBreakdownSQL(
+        sourceFilter: Set<AgentSourceID>,
+        modelFamilyFilter: Set<String>,
+        deviceFilter: Set<String>
+    ) -> String {
         """
+        \(allUsageCTE())
         SELECT model_family,
                source_id,
                SUM(input_tokens) AS input,
@@ -293,14 +438,51 @@ public final class GRDBUsageEventStore: UsageEventStore, Sendable {
                SUM(cache_read_tokens) AS cacheRead,
                SUM(reasoning_tokens) AS reasoning,
                SUM(cost_usd) AS cost,
-               COUNT(*) AS eventCount,
-               SUM(CASE WHEN cost_is_estimated = 1 THEN 1 ELSE 0 END) AS estimatedEvents
-        FROM usage_event
-        WHERE substr(timestamp_utc, 1, 10) BETWEEN ? AND ?
+               SUM(event_count) AS eventCount,
+               SUM(estimated_event_count) AS estimatedEvents
+        FROM dated_usage
+        WHERE local_day BETWEEN ? AND ?
         \(sourceFilterClause(sourceFilter))
         \(modelFilterClause(modelFamilyFilter))
+        \(deviceFilterClause(deviceFilter))
         GROUP BY model_family, source_id
         ORDER BY cost DESC
+        """
+    }
+
+    private static func deviceBreakdownSQL(
+        sourceFilter: Set<AgentSourceID>,
+        modelFamilyFilter: Set<String>,
+        deviceFilter: Set<String>
+    ) -> String {
+        """
+        \(allUsageCTE()), all_devices AS (
+            SELECT id, display_name, last_synced_at, 1 AS is_local
+            FROM local_device
+            UNION ALL
+            SELECT id, display_name, last_synced_at, 0 AS is_local
+            FROM synced_device
+        )
+        SELECT usage.device_id,
+               devices.display_name,
+               devices.last_synced_at,
+               devices.is_local,
+               SUM(input_tokens) AS input,
+               SUM(output_tokens) AS output,
+               SUM(cache_create_tokens) AS cacheCreate,
+               SUM(cache_read_tokens) AS cacheRead,
+               SUM(reasoning_tokens) AS reasoning,
+               SUM(cost_usd) AS cost,
+               SUM(event_count) AS eventCount,
+               SUM(estimated_event_count) AS estimatedEvents
+        FROM dated_usage usage
+        JOIN all_devices devices ON devices.id = usage.device_id
+        WHERE local_day BETWEEN ? AND ?
+        \(sourceFilterClause(sourceFilter))
+        \(modelFilterClause(modelFamilyFilter))
+        \(deviceFilterClause(deviceFilter))
+        GROUP BY usage.device_id, devices.display_name, devices.last_synced_at, devices.is_local
+        ORDER BY devices.display_name COLLATE NOCASE
         """
     }
 

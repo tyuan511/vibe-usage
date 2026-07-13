@@ -46,6 +46,38 @@ struct SourceMetricRow: View {
     }
 }
 
+struct DeviceMetricRow: View {
+    let device: DeviceUsageSummary
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: device.isLocal ? "desktopcomputer" : "laptopcomputer")
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(.secondary)
+                .frame(width: 18, height: 18)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(device.name)
+                    .font(.callout)
+                    .lineLimit(1)
+                if device.isLocal {
+                    Text(UIStrings.text(zh: "此 Mac", en: "This Mac"))
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            Spacer()
+            VStack(alignment: .trailing, spacing: 1) {
+                Text(UIStrings.costLabel(device.totals.costUSD.usdString, estimated: device.hasEstimatedCost))
+                    .font(.callout.monospacedDigit())
+                Text(device.totals.tokens.total.compactString)
+                    .font(.caption2.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(.vertical, 6)
+    }
+}
+
 struct ModelMetricRow: View {
     let model: ModelUsageSummary
 

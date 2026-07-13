@@ -8,6 +8,8 @@ public struct VibeUsageSettingsView: View {
     @Binding var hiddenAgentSourceIDs: Set<AgentSourceID>
     @Binding var enablesLimitMonitoring: Bool
     @Binding var hiddenQuotaSourceIDs: Set<AgentSourceID>
+    @Binding var sync: SyncSettingsPresentation
+    let syncActions: SyncSettingsActions
     let pricingLastUpdatedAt: Date?
     let pricingUpdateError: String?
     let isUpdatingPricing: Bool
@@ -18,6 +20,10 @@ public struct VibeUsageSettingsView: View {
     let currentVersion: String
     let canCheckForUpdates: Bool
     let onCheckForUpdates: () -> Void
+    @State private var showsSyncConfiguration = false
+    @State private var confirmsTargetSwitch = false
+    @State private var confirmsRemoveSyncConfiguration = false
+    @State private var pendingDeviceDeletion: SyncSettingsPresentation.Device?
 
     public init(
         configurableAgentSources: [AgentSourceDescriptor],
@@ -26,6 +32,8 @@ public struct VibeUsageSettingsView: View {
         hiddenAgentSourceIDs: Binding<Set<AgentSourceID>>,
         enablesLimitMonitoring: Binding<Bool>,
         hiddenQuotaSourceIDs: Binding<Set<AgentSourceID>>,
+        sync: Binding<SyncSettingsPresentation>,
+        syncActions: SyncSettingsActions,
         pricingLastUpdatedAt: Date?,
         pricingUpdateError: String?,
         isUpdatingPricing: Bool,
@@ -43,6 +51,8 @@ public struct VibeUsageSettingsView: View {
         self._hiddenAgentSourceIDs = hiddenAgentSourceIDs
         self._enablesLimitMonitoring = enablesLimitMonitoring
         self._hiddenQuotaSourceIDs = hiddenQuotaSourceIDs
+        self._sync = sync
+        self.syncActions = syncActions
         self.pricingLastUpdatedAt = pricingLastUpdatedAt
         self.pricingUpdateError = pricingUpdateError
         self.isUpdatingPricing = isUpdatingPricing
@@ -122,6 +132,8 @@ public struct VibeUsageSettingsView: View {
                 Text(UIStrings.text(zh: "订阅额度", en: "Subscription Limits"))
             }
 
+            syncSection
+
             Section(UIStrings.text(zh: "更新", en: "Updates")) {
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
@@ -179,7 +191,188 @@ public struct VibeUsageSettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 520, height: 640)
+        .frame(width: 540, height: 720)
+        .sheet(isPresented: $showsSyncConfiguration) {
+            SyncConfigurationView(
+                draft: $sync.form,
+                isTesting: sync.isTestingConnection,
+                error: sync.error,
+                onSave: requestSyncConfigurationSave
+            )
+        }
+        .confirmationDialog(
+            UIStrings.text(zh: "切换同步目标？", en: "Switch sync target?"),
+            isPresented: $confirmsTargetSwitch
+        ) {
+            Button(UIStrings.text(zh: "测试并切换", en: "Test and Switch")) {
+                syncActions.testAndSave()
+            }
+            Button(UIStrings.text(zh: "取消", en: "Cancel"), role: .cancel) {}
+        } message: {
+            Text(UIStrings.text(
+                zh: "旧数据不会自动迁移，其他设备也需要改为相同配置并重新发布。",
+                en: "Existing data is not migrated. Other devices must use the same target and publish again."
+            ))
+        }
+        .confirmationDialog(
+            UIStrings.text(zh: "移除同步配置？", en: "Remove sync configuration?"),
+            isPresented: $confirmsRemoveSyncConfiguration
+        ) {
+            Button(UIStrings.text(zh: "移除配置与缓存", en: "Remove Configuration and Cache"), role: .destructive) {
+                syncActions.removeConfiguration()
+            }
+            Button(UIStrings.text(zh: "取消", en: "Cancel"), role: .cancel) {}
+        } message: {
+            Text(UIStrings.text(
+                zh: "只清除这台 Mac 的配置、凭据和远端缓存，不删除服务器文件。",
+                en: "This clears configuration, credentials, and remote cache on this Mac without deleting server files."
+            ))
+        }
+        .confirmationDialog(
+            UIStrings.text(zh: "删除设备远端历史？", en: "Delete remote device history?"),
+            isPresented: Binding(
+                get: { pendingDeviceDeletion != nil },
+                set: { if !$0 { pendingDeviceDeletion = nil } }
+            ),
+            presenting: pendingDeviceDeletion
+        ) { device in
+            Button(UIStrings.text(zh: "删除 \(device.name)", en: "Delete \(device.name)"), role: .destructive) {
+                syncActions.deleteRemoteDevice(device.id)
+                pendingDeviceDeletion = nil
+            }
+            Button(UIStrings.text(zh: "取消", en: "Cancel"), role: .cancel) {}
+        } message: { _ in
+            Text(UIStrings.text(
+                zh: "该设备再次上线时可以重新发布并恢复显示。",
+                en: "The device can publish again and reappear when it comes online."
+            ))
+        }
+    }
+
+    private var syncSection: some View {
+        Section {
+            Toggle(UIStrings.text(zh: "启用同步", en: "Enable Sync"), isOn: $sync.isEnabled)
+                .toggleStyle(.switch)
+                .disabled(!sync.hasConfiguration)
+
+            LabeledContent(UIStrings.text(zh: "当前设备", en: "This Device")) {
+                TextField(UIStrings.text(zh: "设备名称", en: "Device Name"), text: $sync.deviceName)
+                    .multilineTextAlignment(.trailing)
+                    .frame(width: 220)
+            }
+
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(sync.configuredBackendName ?? UIStrings.text(zh: "未配置", en: "Not Configured"))
+                    if let summary = sync.configurationSummary {
+                        Text(summary)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
+                }
+                Spacer()
+                Button {
+                    showsSyncConfiguration = true
+                } label: {
+                    Label(UIStrings.text(zh: "配置", en: "Configure"), systemImage: "externaldrive.badge.wifi")
+                }
+            }
+
+            if sync.hasConfiguration {
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(syncStatusTitle)
+                        if let lastSuccessfulAt = sync.lastSuccessfulAt {
+                            Text(UIStrings.updated(lastSuccessfulAt))
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    Spacer()
+                    Button(action: syncActions.syncNow) {
+                        if sync.isSyncing {
+                            ProgressView().controlSize(.small)
+                        } else {
+                            Label(UIStrings.text(zh: "立即同步", en: "Sync Now"), systemImage: "arrow.triangle.2.circlepath")
+                        }
+                    }
+                    .disabled(!sync.isEnabled || sync.isSyncing)
+                }
+            }
+
+            if !sync.devices.isEmpty {
+                ForEach(sync.devices) { device in
+                    HStack(spacing: 8) {
+                        Toggle(isOn: syncDeviceVisibilityBinding(device.id)) {
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(device.name)
+                                if let lastSyncedAt = device.lastSyncedAt {
+                                    Text(UIStrings.updated(lastSyncedAt))
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                        }
+                        .toggleStyle(.checkbox)
+                        if device.isLocal {
+                            Text(UIStrings.text(zh: "此 Mac", en: "This Mac"))
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        } else {
+                            Button {
+                                pendingDeviceDeletion = device
+                            } label: {
+                                Image(systemName: "trash")
+                            }
+                            .buttonStyle(.borderless)
+                            .help(UIStrings.text(zh: "删除远端历史", en: "Delete Remote History"))
+                        }
+                    }
+                }
+            }
+
+            if let error = sync.error {
+                Text(error)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
+
+            if sync.hasConfiguration {
+                Button(role: .destructive) {
+                    confirmsRemoveSyncConfiguration = true
+                } label: {
+                    Label(UIStrings.text(zh: "移除配置与缓存", en: "Remove Configuration and Cache"), systemImage: "xmark.circle")
+                }
+            }
+        } header: {
+            Text(UIStrings.text(zh: "多端同步", en: "Multi-Device Sync"))
+        }
+    }
+
+    private var syncStatusTitle: String {
+        if sync.isSyncing { return UIStrings.text(zh: "同步中", en: "Syncing") }
+        return UIStrings.text(zh: "同步状态", en: "Sync Status")
+    }
+
+    private func requestSyncConfigurationSave() {
+        if let configuredTargetIdentity = sync.configuredTargetIdentity,
+           configuredTargetIdentity != sync.form.targetIdentity {
+            confirmsTargetSwitch = true
+        } else {
+            syncActions.testAndSave()
+        }
+    }
+
+    private func syncDeviceVisibilityBinding(_ id: String) -> Binding<Bool> {
+        Binding(
+            get: { !sync.hiddenDeviceIDs.contains(id) },
+            set: { visible in
+                if visible { sync.hiddenDeviceIDs.remove(id) }
+                else { sync.hiddenDeviceIDs.insert(id) }
+            }
+        )
     }
 
     private var loginItemMessage: String {

@@ -97,6 +97,7 @@ public struct UsageDashboardSnapshot: Sendable, Equatable {
     public let rangeStartDay: String
     public let rangeEndDay: String
     public let totals: UsageTotals
+    public let devices: [DeviceUsageSummary]
     public let sources: [SourceUsageSummary]
     public let daily: [DailyUsageSummary]
     public let activity: [DailyUsageSummary]
@@ -109,6 +110,7 @@ public struct UsageDashboardSnapshot: Sendable, Equatable {
         rangeStartDay: String,
         rangeEndDay: String,
         totals: UsageTotals,
+        devices: [DeviceUsageSummary] = [],
         sources: [SourceUsageSummary],
         daily: [DailyUsageSummary],
         activity: [DailyUsageSummary],
@@ -120,6 +122,7 @@ public struct UsageDashboardSnapshot: Sendable, Equatable {
         self.rangeStartDay = rangeStartDay
         self.rangeEndDay = rangeEndDay
         self.totals = totals
+        self.devices = devices
         self.sources = sources
         self.daily = daily
         self.activity = activity
@@ -260,6 +263,7 @@ public final class UsageAggregationService: Sendable {
     public func dashboardSnapshot(
         sourceFilter: Set<AgentSourceID> = [],
         visibleSourceFilter: Set<AgentSourceID>? = nil,
+        visibleDeviceFilter: Set<String>? = nil,
         modelFilter: Set<String> = [],
         dateRange: UsageDateRangePreset? = nil,
         daysBack: Int = 30,
@@ -290,23 +294,41 @@ public final class UsageAggregationService: Sendable {
         } else {
             effectiveSourceFilter = sourceFilter
         }
+        if let visibleDeviceFilter, visibleDeviceFilter.isEmpty {
+            return UsageDashboardSnapshot(
+                generatedAt: now,
+                rangeStartDay: start,
+                rangeEndDay: end,
+                totals: UsageTotals(),
+                sources: [],
+                daily: [],
+                activity: [],
+                models: [],
+                availableModels: [],
+                discoveredSources: []
+            )
+        }
+        let effectiveDeviceFilter = visibleDeviceFilter ?? []
 
         let dailyRows = try store.dailySummaries(
             sourceFilter: effectiveSourceFilter,
             startDay: start,
             endDay: end,
-            modelFamilyFilter: modelFilter
+            modelFamilyFilter: modelFilter,
+            deviceFilter: effectiveDeviceFilter
         )
         let modelRows = try store.modelBreakdown(
             sourceFilter: effectiveSourceFilter,
             startDay: start,
             endDay: end,
-            modelFamilyFilter: modelFilter
+            modelFamilyFilter: modelFilter,
+            deviceFilter: effectiveDeviceFilter
         )
         let availableModelRows = try store.modelBreakdown(
             sourceFilter: effectiveSourceFilter,
             startDay: start,
-            endDay: end
+            endDay: end,
+            deviceFilter: effectiveDeviceFilter
         )
         let activityStart = Date.vibeUsageDayString(Self.activityStartDate(now: now))
         let activityEnd = Date.vibeUsageDayString(now)
@@ -314,6 +336,14 @@ public final class UsageAggregationService: Sendable {
             sourceFilter: effectiveSourceFilter,
             startDay: activityStart,
             endDay: activityEnd,
+            modelFamilyFilter: modelFilter,
+            deviceFilter: effectiveDeviceFilter
+        )
+        let deviceRows = try store.deviceBreakdown(
+            deviceFilter: effectiveDeviceFilter,
+            sourceFilter: effectiveSourceFilter,
+            startDay: start,
+            endDay: end,
             modelFamilyFilter: modelFilter
         )
         let descriptors = registry.descriptors
@@ -351,6 +381,20 @@ public final class UsageAggregationService: Sendable {
             rangeStartDay: start,
             rangeEndDay: end,
             totals: grand.totals,
+            devices: deviceRows.map { row in
+                DeviceUsageSummary(
+                    id: row.device.id,
+                    name: row.device.name,
+                    isLocal: row.device.isLocal,
+                    lastSyncedAt: row.device.lastSyncedAt,
+                    totals: UsageTotals(
+                        tokens: row.tokens,
+                        costUSD: row.costUSD,
+                        eventCount: row.eventCount
+                    ),
+                    hasEstimatedCost: row.estimatedEventCount > 0
+                )
+            },
             sources: sourceSummaries,
             daily: dailyRows.map {
                 DailyUsageSummary(day: $0.day, sourceID: $0.sourceID, tokens: $0.tokens, costUSD: $0.costUSD)

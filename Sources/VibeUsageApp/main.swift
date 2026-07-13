@@ -6,6 +6,7 @@ import VibeUsageCore
 import VibeUsagePricing
 import VibeUsageQuota
 import VibeUsageStorage
+import VibeUsageSync
 import VibeUsageUI
 import VibeUsageWatching
 
@@ -24,33 +25,66 @@ struct VibeUsageApp: App {
         .menuBarExtraStyle(.window)
 
         Settings {
-            VibeUsageSettingsView(
-                configurableAgentSources: viewModel.configurableAgentSources,
-                launchesAtLogin: Binding(
-                    get: { loginItemController.isEnabled },
-                    set: { loginItemController.setEnabled($0) }
-                ),
-                menuBarMetricMode: $viewModel.menuBarMetricMode,
-                hiddenAgentSourceIDs: $viewModel.hiddenAgentSourceIDs,
-                enablesLimitMonitoring: $viewModel.enablesLimitMonitoring,
-                hiddenQuotaSourceIDs: $viewModel.hiddenQuotaSourceIDs,
-                pricingLastUpdatedAt: viewModel.pricingLastUpdatedAt,
-                pricingUpdateError: viewModel.pricingUpdateError,
-                isUpdatingPricing: viewModel.isUpdatingPricing,
-                onUpdatePricing: { viewModel.updatePricing() },
-                loginItemRequiresApproval: loginItemController.requiresApproval,
-                loginItemError: loginItemController.errorDescription,
-                onOpenLoginItemSettings: { loginItemController.openSystemSettings() },
-                currentVersion: updateController.currentVersion,
-                canCheckForUpdates: updateController.canCheckForUpdates,
-                onCheckForUpdates: { updateController.checkForUpdates() }
-            )
+            if let syncController = viewModel.syncController {
+                SettingsContentView(
+                    viewModel: viewModel,
+                    syncController: syncController,
+                    updateController: updateController,
+                    loginItemController: loginItemController
+                )
+            } else {
+                StartupFailureView(
+                    message: viewModel.startupError ?? "Sync storage is unavailable.",
+                    onQuit: { NSApp.terminate(nil) }
+                )
+            }
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
                 loginItemController.refresh()
             }
         }
+    }
+}
+
+private struct SettingsContentView: View {
+    @ObservedObject var viewModel: AppViewModel
+    @ObservedObject var syncController: AppSyncController
+    @ObservedObject var updateController: SparkleUpdateController
+    @ObservedObject var loginItemController: LoginItemController
+
+    var body: some View {
+        VibeUsageSettingsView(
+            configurableAgentSources: viewModel.configurableAgentSources,
+            launchesAtLogin: Binding(
+                get: { loginItemController.isEnabled },
+                set: { loginItemController.setEnabled($0) }
+            ),
+            menuBarMetricMode: $viewModel.menuBarMetricMode,
+            hiddenAgentSourceIDs: $viewModel.hiddenAgentSourceIDs,
+            enablesLimitMonitoring: $viewModel.enablesLimitMonitoring,
+            hiddenQuotaSourceIDs: $viewModel.hiddenQuotaSourceIDs,
+            sync: Binding(
+                get: { syncController.settingsPresentation },
+                set: { syncController.apply($0) }
+            ),
+            syncActions: SyncSettingsActions(
+                testAndSave: { syncController.testAndSaveConfiguration() },
+                syncNow: { syncController.syncNow() },
+                deleteRemoteDevice: { syncController.deleteRemoteDevice($0) },
+                removeConfiguration: { syncController.removeLocalConfiguration() }
+            ),
+            pricingLastUpdatedAt: viewModel.pricingLastUpdatedAt,
+            pricingUpdateError: viewModel.pricingUpdateError,
+            isUpdatingPricing: viewModel.isUpdatingPricing,
+            onUpdatePricing: { viewModel.updatePricing() },
+            loginItemRequiresApproval: loginItemController.requiresApproval,
+            loginItemError: loginItemController.errorDescription,
+            onOpenLoginItemSettings: { loginItemController.openSystemSettings() },
+            currentVersion: updateController.currentVersion,
+            canCheckForUpdates: updateController.canCheckForUpdates,
+            onCheckForUpdates: { updateController.checkForUpdates() }
+        )
     }
 }
 
@@ -110,7 +144,7 @@ private struct MenuContentView: View {
                 selectedDateRange: $viewModel.selectedDateRange,
                 selectedModelFilter: $viewModel.selectedModelFilter,
                 hiddenQuotaSourceIDs: viewModel.hiddenQuotaSourceIDs,
-                onRefresh: { viewModel.refresh() },
+                onRefresh: { viewModel.refresh(syncAfterScan: true) },
                 onFilterChange: { viewModel.applyFilters() },
                 onOpenSettings: {
                     openSettings()
@@ -177,12 +211,15 @@ final class AppViewModel: ObservableObject {
     private let pricingSnapshotStore: PricingSnapshotStore
     private let pricingUpdateService: PricingUpdateService
     private let aggregation: UsageAggregationService?
+    private let concreteEventStore: GRDBUsageEventStore?
+    let syncController: AppSyncController?
     private let allSourceDescriptors: [AgentSourceDescriptor]
     private let quotaService: QuotaService
     private let quotaConnectionManager = QuotaConnectionManager()
     private var locallyDiscoveredSourceIDs = Set<AgentSourceID>()
     private var autoRefreshCoordinator: UsageAutoRefreshCoordinator?
     private var pendingRefresh = false
+    private var pendingRefreshIncludesSync = false
     private var pendingPricingUpdate = false
     private var isPricingUpdateInProgress = false
     private var pricingUpdateReportsErrors = false
@@ -224,10 +261,13 @@ final class AppViewModel: ObservableObject {
             let store = GRDBUsageEventStore(database: database)
             let pricing = CurrentPricingProvider(BundledPricingProvider())
             _ = try store.repriceEstimatedEvents(using: pricing)
+            let syncController = try AppSyncController(usageStore: store)
             self.eventStore = store
+            self.concreteEventStore = store
             self.pricing = pricing
             self.ingestor = UsageIngestor(registry: registry, store: store, pricing: pricing)
             self.aggregation = UsageAggregationService(store: store, registry: registry)
+            self.syncController = syncController
 
             autoRefreshCoordinator = UsageAutoRefreshCoordinator(registry: registry) { [weak self] in
                 await self?.refresh()
@@ -236,7 +276,9 @@ final class AppViewModel: ObservableObject {
         } catch {
             self.ingestor = nil
             self.aggregation = nil
+            self.concreteEventStore = nil
             self.eventStore = nil
+            self.syncController = nil
             self.pricing = nil
             self.startupError = error.localizedDescription
         }
@@ -244,6 +286,10 @@ final class AppViewModel: ObservableObject {
         refreshQuota()
         startQuotaRefreshTimer()
         isInitializing = false
+        syncController?.onDataChanged = { [weak self] in
+            self?.applySyncedData()
+        }
+        syncController?.syncNow()
         startPricingRefreshTimer()
         refreshPricingSilentlyIfNeeded()
     }
@@ -327,28 +373,32 @@ final class AppViewModel: ObservableObject {
         pricingRefreshTimer = timer
     }
 
-    func refresh() {
+    func refresh(syncAfterScan: Bool = false) {
         refreshQuota()
         guard ingestor != nil else { return }
         guard !isPricingUpdateInProgress else {
             pendingRefresh = true
+            pendingRefreshIncludesSync = pendingRefreshIncludesSync || syncAfterScan
             return
         }
         guard !isRefreshing else {
             pendingRefresh = true
+            pendingRefreshIncludesSync = pendingRefreshIncludesSync || syncAfterScan
             return
         }
-        performRefresh()
+        performRefresh(syncAfterScan: syncAfterScan)
     }
 
-    private func performRefresh() {
+    private func performRefresh(syncAfterScan: Bool = false) {
         guard let ingestor, let aggregation else { return }
         guard !isPricingUpdateInProgress else {
             pendingRefresh = true
+            pendingRefreshIncludesSync = pendingRefreshIncludesSync || syncAfterScan
             return
         }
         guard !isRefreshing else {
             pendingRefresh = true
+            pendingRefreshIncludesSync = pendingRefreshIncludesSync || syncAfterScan
             return
         }
         isRefreshing = true
@@ -357,23 +407,38 @@ final class AppViewModel: ObservableObject {
         Task {
             do {
                 let summary = try await ingestor.scanOnce()
+                var syncError: String?
+                if syncAfterScan {
+                    do {
+                        _ = try await syncController?.synchronizeIfEnabled()
+                    } catch {
+                        syncError = error.localizedDescription
+                    }
+                } else {
+                    syncController?.scheduleSync()
+                }
+                let discoveredSourceIDs = summary.discoveredSourceIDs.union(
+                    (try? concreteEventStore?.knownUsageSourceIDs()) ?? []
+                )
                 let configurableSources = Self.descriptors(
                     from: allSourceDescriptors,
-                    matching: summary.discoveredSourceIDs
+                    matching: discoveredSourceIDs
                 )
                 let visibleSourceIDs = Self.visibleSourceIDs(
-                    discovered: summary.discoveredSourceIDs,
+                    discovered: discoveredSourceIDs,
                     hidden: hiddenAgentSourceIDs
                 )
                 let next = try aggregation.dashboardSnapshot(
                     visibleSourceFilter: visibleSourceIDs,
+                    visibleDeviceFilter: syncController?.visibleDeviceIDs,
                     modelFilter: selectedModelFilter,
                     dateRange: selectedDateRange
                 )
                 await MainActor.run {
-                    locallyDiscoveredSourceIDs = summary.discoveredSourceIDs
+                    locallyDiscoveredSourceIDs = discoveredSourceIDs
                     configurableAgentSources = configurableSources
                     snapshot = next
+                    lastError = syncError
                     reloadMenuBarMetric()
                     finishRefreshCycle()
                 }
@@ -395,7 +460,9 @@ final class AppViewModel: ObservableObject {
         }
         if pendingRefresh {
             pendingRefresh = false
-            performRefresh()
+            let includesSync = pendingRefreshIncludesSync
+            pendingRefreshIncludesSync = false
+            performRefresh(syncAfterScan: includesSync)
         }
     }
 
@@ -502,6 +569,7 @@ final class AppViewModel: ObservableObject {
                     discovered: locallyDiscoveredSourceIDs,
                     hidden: hiddenAgentSourceIDs
                 ),
+                visibleDeviceFilter: syncController?.visibleDeviceIDs,
                 modelFilter: selectedModelFilter,
                 dateRange: selectedDateRange
             )
@@ -523,6 +591,7 @@ final class AppViewModel: ObservableObject {
                     discovered: locallyDiscoveredSourceIDs,
                     hidden: hiddenAgentSourceIDs
                 ),
+                visibleDeviceFilter: syncController?.visibleDeviceIDs,
                 dateRange: .today
             )
             menuBarMetrics = MenuBarMetricFormatter.values(
@@ -549,6 +618,19 @@ final class AppViewModel: ObservableObject {
         matching ids: Set<AgentSourceID>
     ) -> [AgentSourceDescriptor] {
         descriptors.filter { ids.contains($0.id) }
+    }
+
+    private func applySyncedData() {
+        guard !isRefreshing else { return }
+        if let known = try? concreteEventStore?.knownUsageSourceIDs() {
+            locallyDiscoveredSourceIDs.formUnion(known)
+            configurableAgentSources = Self.descriptors(
+                from: allSourceDescriptors,
+                matching: locallyDiscoveredSourceIDs
+            )
+        }
+        applyFilters()
+        reloadMenuBarMetric()
     }
 
     private static let hiddenAgentSourceIDsKey = "hiddenAgentSourceIDs"

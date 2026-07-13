@@ -54,6 +54,16 @@ let package = Package(
             ]
         ),
 
+        // MARK: - Sync (backend-neutral shard format and remote adapters)
+        .target(
+            name: "VibeUsageSync",
+            dependencies: ["VibeUsageCore", "VibeUsageStorage"]
+        ),
+        .testTarget(
+            name: "VibeUsageSyncTests",
+            dependencies: ["VibeUsageSync", "VibeUsageStorage"]
+        ),
+
         // MARK: - Watching (FSEvents-based file watching, adapter-agnostic)
         .target(
             name: "VibeUsageWatching",
@@ -106,7 +116,11 @@ let package = Package(
         // MARK: - UI (SwiftUI views; only knows adapters through AdapterRegistry)
         .target(
             name: "VibeUsageUI",
-            dependencies: ["VibeUsageCore", "VibeUsageAggregation", "VibeUsageQuota"],
+            dependencies: [
+                "VibeUsageCore",
+                "VibeUsageAggregation",
+                "VibeUsageQuota"
+            ],
             resources: [
                 .copy("Resources/logo.png"),
                 .copy("Resources/AgentIcons")
@@ -124,6 +138,7 @@ let package = Package(
                 "VibeUsageCore",
                 "VibeUsagePricing",
                 "VibeUsageStorage",
+                "VibeUsageSync",
                 "VibeUsageWatching",
                 "VibeUsageAggregation",
                 "VibeUsageAdapter",
