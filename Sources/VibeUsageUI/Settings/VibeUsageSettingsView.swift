@@ -256,7 +256,8 @@ public struct VibeUsageSettingsView: View {
                 .disabled(!sync.hasConfiguration)
 
             LabeledContent(UIStrings.text(zh: "当前设备", en: "This Device")) {
-                TextField(UIStrings.text(zh: "设备名称", en: "Device Name"), text: $sync.deviceName)
+                TextField("", text: $sync.deviceName)
+                    .accessibilityLabel(UIStrings.text(zh: "设备名称", en: "Device Name"))
                     .multilineTextAlignment(.trailing)
                     .frame(width: 220)
             }
