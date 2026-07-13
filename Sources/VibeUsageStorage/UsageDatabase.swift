@@ -47,6 +47,9 @@ public final class UsageDatabase: Sendable {
         migrator.registerMigration("v3_usage_sync") { db in
             try V3UsageSync.migrate(db)
         }
+        migrator.registerMigration("v4_sync_dirty_day_revision") { db in
+            try V4SyncDirtyDayRevision.migrate(db)
+        }
         return migrator
     }
 
