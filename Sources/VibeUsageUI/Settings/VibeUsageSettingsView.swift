@@ -317,12 +317,7 @@ public struct VibeUsageSettingsView: View {
                             }
                             .toggleStyle(.checkbox)
                         }
-                        if device.isLocal {
-                            Spacer()
-                            Text(UIStrings.text(zh: "此 Mac", en: "This Mac"))
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        } else {
+                        if !device.isLocal {
                             Button {
                                 pendingDeviceDeletion = device
                             } label: {
@@ -356,7 +351,14 @@ public struct VibeUsageSettingsView: View {
     @ViewBuilder
     private func syncDeviceLabel(_ device: SyncSettingsPresentation.Device) -> some View {
         VStack(alignment: .leading, spacing: 1) {
-            Text(device.name)
+            HStack(spacing: 6) {
+                Text(device.name)
+                if device.isLocal {
+                    Text(UIStrings.text(zh: "此 Mac", en: "This Mac"))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
             if let lastSyncedAt = device.lastSyncedAt {
                 Text(UIStrings.updated(lastSyncedAt))
                     .font(.caption)
