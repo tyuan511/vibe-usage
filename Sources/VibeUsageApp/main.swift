@@ -69,7 +69,7 @@ private struct SettingsContentView: View {
                 set: { syncController.apply($0) }
             ),
             syncActions: SyncSettingsActions(
-                testAndSave: { syncController.testAndSaveConfiguration() },
+                testAndSave: { await syncController.testAndSaveConfiguration() },
                 syncNow: { syncController.syncNow() },
                 deleteRemoteDevice: { syncController.deleteRemoteDevice($0) },
                 removeConfiguration: { syncController.removeLocalConfiguration() }

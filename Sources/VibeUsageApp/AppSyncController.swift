@@ -92,6 +92,7 @@ final class AppSyncController: ObservableObject {
     private let service: UsageSyncService
     private let preferences: SyncPreferences
     private let credentialStore: any SyncCredentialStoring
+    private let httpClient: any SyncHTTPClient
     private let defaults: UserDefaults
     private var timer: Timer?
     private var debounceTask: Task<Void, Never>?
@@ -103,12 +104,14 @@ final class AppSyncController: ObservableObject {
         usageStore: GRDBUsageEventStore,
         preferences: SyncPreferences = SyncPreferences(),
         credentialStore: any SyncCredentialStoring = KeychainSyncCredentialStore(),
+        httpClient: any SyncHTTPClient = URLSessionSyncHTTPClient(),
         defaults: UserDefaults = .standard
     ) throws {
         self.usageStore = usageStore
         self.service = UsageSyncService(usageStore: usageStore)
         self.preferences = preferences
         self.credentialStore = credentialStore
+        self.httpClient = httpClient
         self.defaults = defaults
         let configuration = preferences.loadConfiguration()
         self.configuration = configuration
@@ -130,40 +133,43 @@ final class AppSyncController: ObservableObject {
         retryTask?.cancel()
     }
 
-    func testAndSaveConfiguration() {
-        guard !isTestingConnection else { return }
+    func testAndSaveConfiguration() async -> Bool {
+        guard !isTestingConnection else { return false }
         isTestingConnection = true
         lastError = nil
-        Task {
-            defer { isTestingConnection = false }
-            do {
-                var candidate = draft
-                if let stored = try credentialStore.load() {
-                    if candidate.backend == .webDAV, candidate.webDAVPassword.isEmpty {
-                        candidate.webDAVPassword = stored.webDAVPassword ?? ""
-                    }
-                    if candidate.backend == .s3, candidate.s3SecretKey.isEmpty {
-                        candidate.s3SecretKey = stored.s3SecretKey ?? ""
-                    }
+        defer { isTestingConnection = false }
+        do {
+            var candidate = draft
+            if let stored = try credentialStore.load() {
+                if candidate.backend == .webDAV, candidate.webDAVPassword.isEmpty {
+                    candidate.webDAVPassword = stored.webDAVPassword ?? ""
                 }
-                let resolved = try candidate.resolve()
-                let objectStore = try resolved.configuration.makeObjectStore(credentials: resolved.credentials)
-                try await objectStore.validateAccess()
-                let targetChanged = configuration?.targetIdentity != resolved.configuration.targetIdentity
-                if targetChanged {
-                    try usageStore.resetPublishedSyncState()
+                if candidate.backend == .s3, candidate.s3SecretKey.isEmpty {
+                    candidate.s3SecretKey = stored.s3SecretKey ?? ""
                 }
-                try credentialStore.save(resolved.credentials)
-                try preferences.saveConfiguration(resolved.configuration)
-                configuration = resolved.configuration
-                draft = SyncConnectionDraft(configuration: resolved.configuration, credentials: nil)
-                lastError = nil
-                if isEnabled {
-                    _ = try await synchronizeIfEnabled()
-                }
-            } catch {
-                lastError = error.localizedDescription
             }
+            let resolved = try candidate.resolve()
+            let objectStore = try resolved.configuration.makeObjectStore(
+                credentials: resolved.credentials,
+                httpClient: httpClient
+            )
+            try await objectStore.validateAccess()
+            let targetChanged = configuration?.targetIdentity != resolved.configuration.targetIdentity
+            if targetChanged {
+                try usageStore.resetPublishedSyncState()
+            }
+            try credentialStore.save(resolved.credentials)
+            try preferences.saveConfiguration(resolved.configuration)
+            configuration = resolved.configuration
+            draft = SyncConnectionDraft(configuration: resolved.configuration, credentials: nil)
+            lastError = nil
+            if isEnabled {
+                _ = try await synchronizeIfEnabled()
+            }
+            return true
+        } catch {
+            lastError = error.localizedDescription
+            return false
         }
     }
 
@@ -192,7 +198,7 @@ final class AppSyncController: ObservableObject {
             guard let credentials = try credentialStore.load() else {
                 throw SyncObjectStoreError.invalidConfiguration("Sync credentials are missing from Keychain.")
             }
-            let objectStore = try configuration.makeObjectStore(credentials: credentials)
+            let objectStore = try configuration.makeObjectStore(credentials: credentials, httpClient: httpClient)
             let result = try await service.synchronize(with: objectStore, defaultDeviceName: deviceName)
             retryAttempt = 0
             retryTask?.cancel()
@@ -224,7 +230,7 @@ final class AppSyncController: ObservableObject {
                 guard let configuration, let credentials = try credentialStore.load() else {
                     throw SyncObjectStoreError.invalidConfiguration("Sync is not configured.")
                 }
-                let objectStore = try configuration.makeObjectStore(credentials: credentials)
+                let objectStore = try configuration.makeObjectStore(credentials: credentials, httpClient: httpClient)
                 try await service.deleteRemoteDevice(deviceID, from: objectStore)
                 hiddenDeviceIDs.remove(deviceID)
                 reloadDevices()

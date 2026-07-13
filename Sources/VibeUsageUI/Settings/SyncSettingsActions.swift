@@ -1,11 +1,11 @@
 public struct SyncSettingsActions {
-    public let testAndSave: () -> Void
+    public let testAndSave: () async -> Bool
     public let syncNow: () -> Void
     public let deleteRemoteDevice: (String) -> Void
     public let removeConfiguration: () -> Void
 
     public init(
-        testAndSave: @escaping () -> Void,
+        testAndSave: @escaping () async -> Bool,
         syncNow: @escaping () -> Void,
         deleteRemoteDevice: @escaping (String) -> Void,
         removeConfiguration: @escaping () -> Void

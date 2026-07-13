@@ -205,7 +205,7 @@ public struct VibeUsageSettingsView: View {
             isPresented: $confirmsTargetSwitch
         ) {
             Button(UIStrings.text(zh: "测试并切换", en: "Test and Switch")) {
-                syncActions.testAndSave()
+                saveSyncConfiguration()
             }
             Button(UIStrings.text(zh: "取消", en: "Cancel"), role: .cancel) {}
         } message: {
@@ -362,7 +362,15 @@ public struct VibeUsageSettingsView: View {
            configuredTargetIdentity != sync.form.targetIdentity {
             confirmsTargetSwitch = true
         } else {
-            syncActions.testAndSave()
+            saveSyncConfiguration()
+        }
+    }
+
+    private func saveSyncConfiguration() {
+        Task {
+            if await syncActions.testAndSave() {
+                showsSyncConfiguration = false
+            }
         }
     }
 
