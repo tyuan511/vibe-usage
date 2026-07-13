@@ -52,7 +52,8 @@ final class AppSyncController: ObservableObject {
     var onDataChanged: (() -> Void)?
 
     var visibleDeviceIDs: Set<String> {
-        Set(devices.map(\.id)).subtracting(hiddenDeviceIDs)
+        let localIDs = Set(devices.filter(\.isLocal).map(\.id))
+        return Set(devices.map(\.id)).subtracting(hiddenDeviceIDs).union(localIDs)
     }
 
     var hasConfiguredTarget: Bool { configuration != nil }
@@ -84,7 +85,9 @@ final class AppSyncController: ObservableObject {
     func apply(_ presentation: SyncSettingsPresentation) {
         draft = Self.syncDraft(presentation.form)
         if deviceName != presentation.deviceName { deviceName = presentation.deviceName }
-        if hiddenDeviceIDs != presentation.hiddenDeviceIDs { hiddenDeviceIDs = presentation.hiddenDeviceIDs }
+        let localIDs = Set(devices.filter(\.isLocal).map(\.id))
+        let nextHiddenDeviceIDs = presentation.hiddenDeviceIDs.subtracting(localIDs)
+        if hiddenDeviceIDs != nextHiddenDeviceIDs { hiddenDeviceIDs = nextHiddenDeviceIDs }
         if isEnabled != presentation.isEnabled { isEnabled = presentation.isEnabled }
     }
 
@@ -116,14 +119,18 @@ final class AppSyncController: ObservableObject {
         let configuration = preferences.loadConfiguration()
         self.configuration = configuration
         self.draft = SyncConnectionDraft(configuration: configuration, credentials: nil)
-        self.hiddenDeviceIDs = Set(defaults.stringArray(forKey: Self.hiddenDeviceIDsKey) ?? [])
         let defaultName = Host.current().localizedName ?? "Mac"
         let localDevice = try usageStore.localDevice(defaultName: defaultName)
+        let storedHiddenDeviceIDs = Set(defaults.stringArray(forKey: Self.hiddenDeviceIDsKey) ?? [])
+        self.hiddenDeviceIDs = storedHiddenDeviceIDs.subtracting([localDevice.id])
         self.deviceName = localDevice.name
         self.devices = try usageStore.allUsageDevices()
         self.lastSuccessfulSyncAt = localDevice.lastSyncedAt
         self.isEnabled = preferences.isEnabled && configuration != nil
         isInitializing = false
+        if hiddenDeviceIDs != storedHiddenDeviceIDs {
+            defaults.set(Array(hiddenDeviceIDs).sorted(), forKey: Self.hiddenDeviceIDsKey)
+        }
         if isEnabled { startTimer() }
     }
 

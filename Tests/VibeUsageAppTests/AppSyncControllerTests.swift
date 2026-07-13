@@ -62,6 +62,27 @@ final class AppSyncControllerTests: XCTestCase {
         XCTAssertNil(controller.lastError)
         XCTAssertFalse(controller.isTestingConnection)
     }
+
+    @MainActor
+    func testApplyKeepsLocalDeviceVisible() throws {
+        let suiteName = "AppSyncControllerTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let controller = try AppSyncController(
+            usageStore: GRDBUsageEventStore(database: try UsageDatabase()),
+            preferences: SyncPreferences(defaults: defaults),
+            credentialStore: MemorySyncCredentialStore(),
+            defaults: defaults
+        )
+        let localID = try XCTUnwrap(controller.devices.first(where: \.isLocal)?.id)
+        var presentation = controller.settingsPresentation
+        presentation.hiddenDeviceIDs.insert(localID)
+
+        controller.apply(presentation)
+
+        XCTAssertFalse(controller.hiddenDeviceIDs.contains(localID))
+        XCTAssertTrue(controller.visibleDeviceIDs.contains(localID))
+    }
 }
 
 private final class MemorySyncCredentialStore: SyncCredentialStoring, @unchecked Sendable {

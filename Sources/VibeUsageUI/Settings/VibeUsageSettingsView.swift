@@ -306,18 +306,19 @@ public struct VibeUsageSettingsView: View {
             if !sync.devices.isEmpty {
                 ForEach(sync.devices) { device in
                     HStack(spacing: 8) {
-                        Toggle(isOn: syncDeviceVisibilityBinding(device.id)) {
-                            VStack(alignment: .leading, spacing: 1) {
-                                Text(device.name)
-                                if let lastSyncedAt = device.lastSyncedAt {
-                                    Text(UIStrings.updated(lastSyncedAt))
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                            }
-                        }
-                        .toggleStyle(.checkbox)
                         if device.isLocal {
+                            Image(systemName: "checkmark.square.fill")
+                                .foregroundStyle(.secondary)
+                                .accessibilityHidden(true)
+                            syncDeviceLabel(device)
+                        } else {
+                            Toggle(isOn: syncDeviceVisibilityBinding(device.id)) {
+                                syncDeviceLabel(device)
+                            }
+                            .toggleStyle(.checkbox)
+                        }
+                        if device.isLocal {
+                            Spacer()
                             Text(UIStrings.text(zh: "此 Mac", en: "This Mac"))
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
@@ -349,6 +350,18 @@ public struct VibeUsageSettingsView: View {
             }
         } header: {
             Text(UIStrings.text(zh: "多端同步", en: "Multi-Device Sync"))
+        }
+    }
+
+    @ViewBuilder
+    private func syncDeviceLabel(_ device: SyncSettingsPresentation.Device) -> some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text(device.name)
+            if let lastSyncedAt = device.lastSyncedAt {
+                Text(UIStrings.updated(lastSyncedAt))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
         }
     }
 
