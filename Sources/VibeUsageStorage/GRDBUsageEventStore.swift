@@ -31,6 +31,22 @@ public final class GRDBUsageEventStore: UsageEventStore, Sendable {
         }
     }
 
+    public func fileMetadata(forFiles paths: [String]) throws -> [String: FileParseMetadata] {
+        guard !paths.isEmpty else { return [:] }
+        let uniquePaths = Array(Set(paths))
+        return try dbQueue.read { db in
+            let records = try FileParseStateRecord
+                .filter(uniquePaths.contains(Column("file_path")))
+                .fetchAll(db)
+            var result: [String: FileParseMetadata] = [:]
+            result.reserveCapacity(records.count)
+            for record in records {
+                result[record.filePath] = record.toMetadata()
+            }
+            return result
+        }
+    }
+
     public func applyParseResult(
         _ result: ParseResult,
         file: DiscoveredFile,

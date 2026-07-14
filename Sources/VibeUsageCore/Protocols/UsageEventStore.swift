@@ -26,6 +26,10 @@ public protocol UsageEventStore: Sendable {
     /// Returns the last-known parse state for `path`, or nil if never parsed.
     func fileMetadata(forFile path: String) throws -> FileParseMetadata?
 
+    /// Batch lookup of last-known parse state for many paths in one storage round-trip.
+    /// Missing paths are omitted from the result.
+    func fileMetadata(forFiles paths: [String]) throws -> [String: FileParseMetadata]
+
     /// Atomically persists the events and checkpoint produced by one
     /// `parseIncrementally` call, applying dedup/conflict-resolution against
     /// any existing rows with a colliding dedup key.
@@ -45,4 +49,17 @@ public protocol UsageEventStore: Sendable {
     /// file is detected as truncated/rewritten (its recorded size shrank),
     /// forcing a clean reparse from the start.
     func resetFile(_ path: String) throws
+}
+
+public extension UsageEventStore {
+    func fileMetadata(forFiles paths: [String]) throws -> [String: FileParseMetadata] {
+        var result: [String: FileParseMetadata] = [:]
+        result.reserveCapacity(paths.count)
+        for path in Set(paths) {
+            if let metadata = try fileMetadata(forFile: path) {
+                result[path] = metadata
+            }
+        }
+        return result
+    }
 }

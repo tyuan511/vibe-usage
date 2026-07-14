@@ -54,30 +54,23 @@ public struct ClaudeCodeAdapter: UsageSourceAdapter {
         from checkpoint: ParseCheckpoint?,
         pricing: PricingProvider
     ) throws -> ParseResult {
-        let start = max(0, Int(checkpoint?.byteOffset ?? 0))
-        let data = try Data(contentsOf: URL(fileURLWithPath: path))
-        guard start <= data.count else {
+        let slice = try loadJSONLBytes(path: path, from: checkpoint)
+        if slice.endOffset == 0, (checkpoint?.byteOffset ?? 0) > 0 {
             return ParseResult(events: [], newCheckpoint: .start)
         }
 
         var events: [UsageEvent] = []
-        var offset = start
         var lineIndex = checkpoint?.lineIndex ?? 0
         let project = Self.projectPath(from: path)
         let fileSessionID = Self.sessionID(from: path)
+        let usageMarker = Data(#""usage""#.utf8)
 
-        while offset < data.count {
-            let lineStart = offset
-            let newline = data[lineStart...].firstIndex(of: 0x0A) ?? data.count
-            let lineEnd = newline
-            offset = newline < data.count ? newline + 1 : data.count
-            defer { lineIndex += 1 }
-
-            let line = data[lineStart..<lineEnd]
-            guard line.contains(#""usage""#.data(using: .utf8)!) else { continue }
-            guard let entry = try? JSONDecoder.vibeUsage.decode(ClaudeUsageEntry.self, from: line) else { continue }
-            guard entry.isValid, let timestamp = Date.vibeUsageParse(entry.timestamp) else { continue }
-            guard let rawModel = entry.message.model?.nonEmpty, rawModel != "<synthetic>" else { continue }
+        forEachJSONLLine(in: slice, startingLineIndex: lineIndex) { line, _, currentLineIndex in
+            lineIndex = currentLineIndex + 1
+            guard line.contains(usageMarker) else { return }
+            guard let entry = try? JSONDecoder.vibeUsage.decode(ClaudeUsageEntry.self, from: line) else { return }
+            guard entry.isValid, let timestamp = Date.vibeUsageParse(entry.timestamp) else { return }
+            guard let rawModel = entry.message.model?.nonEmpty, rawModel != "<synthetic>" else { return }
 
             let tokens = TokenCounts(
                 input: entry.message.usage.inputTokens,
@@ -86,7 +79,7 @@ public struct ClaudeCodeAdapter: UsageSourceAdapter {
                 cacheRead: entry.message.usage.cacheReadInputTokens,
                 reasoning: 0
             )
-            guard tokens.input + tokens.output + tokens.cacheCreate + tokens.cacheRead > 0 else { continue }
+            guard tokens.input + tokens.output + tokens.cacheCreate + tokens.cacheRead > 0 else { return }
 
             let modelFamily = ModelAliasResolver.resolveFamily(fromRawModel: rawModel)
             let priced = Self.cost(
@@ -109,16 +102,16 @@ public struct ClaudeCodeAdapter: UsageSourceAdapter {
                 tokens: tokens,
                 costUSD: priced.cost,
                 costIsEstimated: priced.estimated,
-                dedupKey: Self.dedupKey(messageID: messageID, requestID: requestID, fallbackPath: path, line: lineIndex),
+                dedupKey: Self.dedupKey(messageID: messageID, requestID: requestID, fallbackPath: path, line: currentLineIndex),
                 isSidechainReplay: entry.isSidechain == true,
                 sourceFilePath: path,
-                sourceFileLine: lineIndex + 1
+                sourceFileLine: currentLineIndex + 1
             ))
         }
 
         return ParseResult(
             events: events,
-            newCheckpoint: ParseCheckpoint(byteOffset: Int64(data.count), lineIndex: lineIndex)
+            newCheckpoint: ParseCheckpoint(byteOffset: slice.endOffset, lineIndex: lineIndex)
         )
     }
 

@@ -27,19 +27,26 @@ public struct GooseUsageAdapter: UsageSourceAdapter {
         return discovered(files, sourceID: descriptor.id)
     }
 
-    public func parseIncrementally(fileAt path: String, from _: ParseCheckpoint?, pricing: PricingProvider) throws -> ParseResult {
-        try wholeFileResult(parseGooseDatabase(path: path, descriptor: descriptor, pricing: pricing), path: path)
+    public func parseIncrementally(fileAt path: String, from checkpoint: ParseCheckpoint?, pricing: PricingProvider) throws -> ParseResult {
+        try parseGooseDatabase(path: path, checkpoint: checkpoint, descriptor: descriptor, pricing: pricing)
     }
 }
 
-private func parseGooseDatabase(path: String, descriptor: AgentSourceDescriptor, pricing: PricingProvider) throws -> [UsageEvent] {
+private func parseGooseDatabase(
+    path: String,
+    checkpoint: ParseCheckpoint?,
+    descriptor: AgentSourceDescriptor,
+    pricing: PricingProvider
+) throws -> ParseResult {
     let db = try DatabaseQueue(path: path)
-    return try db.read { database in
-        guard try tableExists("sessions", in: database) else { return [] }
-        return try Row.fetchAll(database, sql: "SELECT * FROM sessions").compactMap { row in
+    var events: [UsageEvent] = []
+    var fingerprints = decodeAdapterState(SQLiteSessionFingerprints.self, from: checkpoint)?.sessions ?? [:]
+    try db.read { database in
+        guard try tableExists("sessions", in: database) else { return }
+        for row in try Row.fetchAll(database, sql: "SELECT * FROM sessions") {
             let object = dictionary(from: row)
             guard let sessionID = firstString(in: object, keys: ["id", "session_id", "sessionId"]),
-                  let timestamp = gooseTimestamp(from: object["created_at"] ?? object["createdAt"]) else { return nil }
+                  let timestamp = gooseTimestamp(from: object["created_at"] ?? object["createdAt"]) else { continue }
             let model = firstString(in: object, keys: ["model", "model_name", "modelName"]) ?? modelFromConfig(firstString(in: object, keys: ["model_config_json", "modelConfigJson"])) ?? "unknown"
             let input = firstInt(in: object, keys: ["accumulated_input_tokens", "input_token_count", "input_tokens", "inputTokens"]) ?? 0
             let output = firstInt(in: object, keys: ["accumulated_output_tokens", "output_token_count", "output_tokens", "outputTokens"]) ?? 0
@@ -48,11 +55,37 @@ private func parseGooseDatabase(path: String, descriptor: AgentSourceDescriptor,
                 TokenCounts(input: input, output: output, reasoning: max(0, total - input - output)),
                 total: total
             )
-            guard counts.total > 0 else { return nil }
+            guard counts.total > 0 else { continue }
+            let fingerprint = sessionFingerprint(model: model, tokens: counts, cost: nil)
+            if fingerprints[sessionID] == fingerprint {
+                continue
+            }
+            fingerprints[sessionID] = fingerprint
             let provider = normalizeGooseProvider(firstString(in: object, keys: ["provider_name", "providerName"]), model: model)
-            return makeEvent(sourceID: descriptor.id, timestamp: timestamp, sessionID: sessionID, project: "Goose", requestID: sessionID, model: model, tokens: counts, displayCost: nil, pricing: pricing, pricingCandidates: gooseModelCandidates(model: model, provider: provider), dedupKey: "\(descriptor.id.rawValue):\(sessionID)", path: path, line: nil)
+            events.append(
+                makeEvent(
+                    sourceID: descriptor.id,
+                    timestamp: timestamp,
+                    sessionID: sessionID,
+                    project: "Goose",
+                    requestID: sessionID,
+                    model: model,
+                    tokens: counts,
+                    displayCost: nil,
+                    pricing: pricing,
+                    pricingCandidates: gooseModelCandidates(model: model, provider: provider),
+                    dedupKey: "\(descriptor.id.rawValue):\(sessionID)",
+                    path: path,
+                    line: nil
+                )
+            )
         }
     }
+    return wholeFileResult(
+        events,
+        path: path,
+        adapterState: encodeAdapterState(SQLiteSessionFingerprints(sessions: fingerprints))
+    )
 }
 
 private func modelFromConfig(_ value: String?) -> String? {

@@ -16,15 +16,22 @@ public struct HermesUsageAdapter: UsageSourceAdapter {
         discovered(roots.map { $0.appendingPathComponent("state.db") }.filter(\.isRegularFile), sourceID: descriptor.id)
     }
 
-    public func parseIncrementally(fileAt path: String, from _: ParseCheckpoint?, pricing: PricingProvider) throws -> ParseResult {
-        try wholeFileResult(parseHermesDatabase(path: path, descriptor: descriptor, pricing: pricing), path: path)
+    public func parseIncrementally(fileAt path: String, from checkpoint: ParseCheckpoint?, pricing: PricingProvider) throws -> ParseResult {
+        try parseHermesDatabase(path: path, checkpoint: checkpoint, descriptor: descriptor, pricing: pricing)
     }
 }
 
-private func parseHermesDatabase(path: String, descriptor: AgentSourceDescriptor, pricing: PricingProvider) throws -> [UsageEvent] {
+private func parseHermesDatabase(
+    path: String,
+    checkpoint: ParseCheckpoint?,
+    descriptor: AgentSourceDescriptor,
+    pricing: PricingProvider
+) throws -> ParseResult {
     let db = try DatabaseQueue(path: path)
-    return try db.read { database in
-        guard try tableExists("sessions", in: database) else { return [] }
+    var events: [UsageEvent] = []
+    var fingerprints = decodeAdapterState(SQLiteSessionFingerprints.self, from: checkpoint)?.sessions ?? [:]
+    try db.read { database in
+        guard try tableExists("sessions", in: database) else { return }
         let hasActualCost = try columnExists("actual_cost", in: "sessions", database: database)
         let hasEstimatedCost = try columnExists("estimated_cost", in: "sessions", database: database)
         let costExpression: String
@@ -38,11 +45,11 @@ private func parseHermesDatabase(path: String, descriptor: AgentSourceDescriptor
         case (false, false):
             costExpression = "NULL"
         }
-        return try Row.fetchAll(database, sql: "SELECT *, \(costExpression) AS vibe_cost FROM sessions").compactMap { row in
+        for row in try Row.fetchAll(database, sql: "SELECT *, \(costExpression) AS vibe_cost FROM sessions") {
             let object = dictionary(from: row)
             guard let sessionID = firstString(in: object, keys: ["id", "session_id", "sessionId"]),
                   let model = firstString(in: object, keys: ["model", "model_id", "modelId"]),
-                  let timestamp = firstDate(in: object, keys: ["started_at", "startedAt", "created_at", "createdAt"]) ?? firstNumber(in: object, keys: ["started_at", "startedAt"]).map(Date.vibeUsageParse) else { return nil }
+                  let timestamp = firstDate(in: object, keys: ["started_at", "startedAt", "created_at", "createdAt"]) ?? firstNumber(in: object, keys: ["started_at", "startedAt"]).map(Date.vibeUsageParse) else { continue }
             let counts = TokenCounts(
                 input: firstInt(in: object, keys: ["input_tokens", "inputTokens"]) ?? 0,
                 output: firstInt(in: object, keys: ["output_tokens", "outputTokens"]) ?? 0,
@@ -50,11 +57,38 @@ private func parseHermesDatabase(path: String, descriptor: AgentSourceDescriptor
                 cacheRead: firstInt(in: object, keys: ["cache_read_tokens", "cacheReadTokens"]) ?? 0,
                 reasoning: firstInt(in: object, keys: ["reasoning_tokens", "reasoningTokens"]) ?? 0
             )
-            guard counts.total > 0 || firstDecimal(in: object, keys: ["actual_cost", "estimated_cost"]) != nil else { return nil }
+            let displayCost = firstDecimal(in: object, keys: ["vibe_cost", "actual_cost", "estimated_cost"])
+            guard counts.total > 0 || displayCost != nil else { continue }
+            let fingerprint = sessionFingerprint(model: model, tokens: counts, cost: displayCost)
+            if fingerprints[sessionID] == fingerprint {
+                continue
+            }
+            fingerprints[sessionID] = fingerprint
             let provider = normalizeHermesProvider(firstString(in: object, keys: ["provider"]), model: model)
-            return makeEvent(sourceID: descriptor.id, timestamp: timestamp, sessionID: sessionID, project: "Hermes Agent", requestID: sessionID, model: model, tokens: counts, displayCost: firstDecimal(in: object, keys: ["vibe_cost", "actual_cost", "estimated_cost"]), pricing: pricing, pricingCandidates: hermesModelCandidates(model: model, provider: provider), dedupKey: "\(descriptor.id.rawValue):\(sessionID)", path: path, line: nil)
+            events.append(
+                makeEvent(
+                    sourceID: descriptor.id,
+                    timestamp: timestamp,
+                    sessionID: sessionID,
+                    project: "Hermes Agent",
+                    requestID: sessionID,
+                    model: model,
+                    tokens: counts,
+                    displayCost: displayCost,
+                    pricing: pricing,
+                    pricingCandidates: hermesModelCandidates(model: model, provider: provider),
+                    dedupKey: "\(descriptor.id.rawValue):\(sessionID)",
+                    path: path,
+                    line: nil
+                )
+            )
         }
     }
+    return wholeFileResult(
+        events,
+        path: path,
+        adapterState: encodeAdapterState(SQLiteSessionFingerprints(sessions: fingerprints))
+    )
 }
 
 private func normalizeHermesProvider(_ value: String?, model: String) -> String {

@@ -41,7 +41,10 @@ public final class UsageIngestor: Sendable {
         self.pricing = pricing
     }
 
-    public func scanOnce(sourceFilter: Set<AgentSourceID> = []) async throws -> IngestionSummary {
+    public func scanOnce(
+        sourceFilter: Set<AgentSourceID> = [],
+        changedPaths: Set<String>? = nil
+    ) async throws -> IngestionSummary {
         let started = Date()
         var scannedFiles = 0
         var skippedFiles = 0
@@ -50,17 +53,21 @@ public final class UsageIngestor: Sendable {
 
         for adapter in registry.allAdapters where sourceFilter.isEmpty || sourceFilter.contains(adapter.descriptor.id) {
             let roots = adapter.discoverRootDirectories()
-            let files = try adapter.discoverFiles(in: roots)
+            var files = try adapter.discoverFiles(in: roots)
+            if let changedPaths {
+                files = files.filter { UsageWatchPaths.file($0.path, matchesChangedPaths: changedPaths) }
+            }
             guard !files.isEmpty else { continue }
 
             discoveredSourceIDs.insert(adapter.descriptor.id)
             try store.ensureSourceRegistered(adapter.descriptor)
 
+            let metadataByPath = try store.fileMetadata(forFiles: files.map(\.path))
             let jobs = try files.compactMap { file -> ScanJob? in
                 guard let attributes = try? FileManager.default.attributesOfItem(atPath: file.path) else { return nil }
                 let fileSize = (attributes[.size] as? NSNumber)?.int64Value ?? 0
                 let modifiedAt = attributes[.modificationDate] as? Date
-                let metadata = try store.fileMetadata(forFile: file.path)
+                let metadata = metadataByPath[file.path]
 
                 if let metadata,
                    fileSize == metadata.fileSizeAtParse,

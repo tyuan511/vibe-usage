@@ -92,7 +92,7 @@ import VibeUsageStorage
         registry: registry,
         refreshInterval: 3600,
         debounceInterval: 0.05
-    ) {
+    ) { _ in
         await counter.increment()
     }
 
@@ -118,7 +118,7 @@ import VibeUsageStorage
         registry: registry,
         refreshInterval: 3600,
         debounceInterval: 0.15
-    ) {
+    ) { _ in
         await counter.increment()
     }
 
@@ -138,6 +138,78 @@ import VibeUsageStorage
 
     let finalCount = await counter.value
     #expect(finalCount <= afterStart + 2)
+}
+
+@Test func watchPathsMapChangedFilesToMatchingSources() throws {
+    let rootA = FileManager.default.temporaryDirectory
+        .appendingPathComponent("vibe-usage-map-a-\(UUID().uuidString)", isDirectory: true)
+    let rootB = FileManager.default.temporaryDirectory
+        .appendingPathComponent("vibe-usage-map-b-\(UUID().uuidString)", isDirectory: true)
+    try FileManager.default.createDirectory(at: rootA, withIntermediateDirectories: true)
+    try FileManager.default.createDirectory(at: rootB, withIntermediateDirectories: true)
+    defer {
+        try? FileManager.default.removeItem(at: rootA)
+        try? FileManager.default.removeItem(at: rootB)
+    }
+
+    let registry = AdapterRegistry()
+    let adapterA = WatchPathTestAdapter(id: "map-a", root: rootA)
+    let adapterB = WatchPathTestAdapter(id: "map-b", root: rootB)
+    registry.register(adapterA)
+    registry.register(adapterB)
+
+    let changed = [rootA.appendingPathComponent("events.jsonl").path]
+    let matched = UsageWatchPaths.sourceIDs(forChangedPaths: changed, registry: registry)
+    #expect(matched == [adapterA.descriptor.id])
+}
+
+@Test func watchPathsReturnEmptyWhenPathIsUnmapped() {
+    let registry = AdapterRegistry()
+    registry.register(WatchPathTestAdapter(root: URL(fileURLWithPath: "/tmp/vibe-usage-unmapped-root")))
+    let matched = UsageWatchPaths.sourceIDs(
+        forChangedPaths: ["/tmp/some-other-path/events.jsonl"],
+        registry: registry
+    )
+    #expect(matched.isEmpty)
+}
+
+@Test func ingestorRespectsSourceFilter() async throws {
+    let environment = try IngestorTestEnvironment.make(extraAdapterIDs: ["ingestor-b"])
+    defer { environment.cleanup() }
+
+    try environment.writeLog("{\"line\":1}\n", adapterID: "ingestor-a")
+    try environment.writeLog("{\"line\":1}\n", adapterID: "ingestor-b")
+
+    let onlyA = try await environment.ingestor.scanOnce(
+        sourceFilter: [AgentSourceID(rawValue: "ingestor-a")]
+    )
+    #expect(onlyA.discoveredSourceIDs == [AgentSourceID(rawValue: "ingestor-a")])
+    #expect(onlyA.insertedEvents == 1)
+}
+
+@Test func ingestorRespectsChangedPathFilter() async throws {
+    let environment = try IngestorTestEnvironment.make(extraAdapterIDs: ["ingestor-b"])
+    defer { environment.cleanup() }
+
+    try environment.writeLog("{\"line\":1}\n", adapterID: "ingestor-a")
+    try environment.writeLog("{\"line\":1}\n", adapterID: "ingestor-b")
+
+    let pathA = environment.root
+        .appendingPathComponent("ingestor-a", isDirectory: true)
+        .appendingPathComponent("events.jsonl")
+        .path
+    let summary = try await environment.ingestor.scanOnce(
+        changedPaths: [pathA]
+    )
+    #expect(summary.discoveredSourceIDs == [AgentSourceID(rawValue: "ingestor-a")])
+    #expect(summary.insertedEvents == 1)
+}
+
+@Test func watchPathsNormalizeSQLiteSidecars() {
+    let db = "/tmp/opencode.db"
+    #expect(UsageWatchPaths.canonicalWatchPath(db + "-wal") == db)
+    #expect(UsageWatchPaths.canonicalWatchPath(db + "-shm") == db)
+    #expect(UsageWatchPaths.file(db, matchesChangedPaths: [db + "-wal"]))
 }
 
 private actor RefreshCounter {
@@ -241,13 +313,19 @@ private struct IngestorTestAdapter: UsageSourceAdapter {
 }
 
 private struct WatchPathTestAdapter: UsageSourceAdapter {
+    let id: String
     let root: URL
+
+    init(id: String = "watch-test", root: URL) {
+        self.id = id
+        self.root = root
+    }
 
     var descriptor: AgentSourceDescriptor {
         AgentSourceDescriptor(
-            id: AgentSourceID(rawValue: "watch-test"),
-            displayName: "Watch Test",
-            shortLabel: "Watch",
+            id: AgentSourceID(rawValue: id),
+            displayName: id,
+            shortLabel: id,
             iconSystemName: "folder",
             tintColorHex: "#000000",
             sortOrder: 999

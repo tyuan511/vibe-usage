@@ -220,6 +220,10 @@ final class AppViewModel: ObservableObject {
     private var autoRefreshCoordinator: UsageAutoRefreshCoordinator?
     private var pendingRefresh = false
     private var pendingRefreshIncludesSync = false
+    /// `nil` while idle; empty set means full scan; non-empty means filtered.
+    private var pendingRefreshSourceFilter: Set<AgentSourceID>?
+    /// `nil` while idle or unrestricted; non-nil restricts the pending scan to these paths.
+    private var pendingRefreshChangedPaths: Set<String>?
     private var pendingPricingUpdate = false
     private var isPricingUpdateInProgress = false
     private var pricingUpdateReportsErrors = false
@@ -269,8 +273,11 @@ final class AppViewModel: ObservableObject {
             self.aggregation = UsageAggregationService(store: store, registry: registry)
             self.syncController = syncController
 
-            autoRefreshCoordinator = UsageAutoRefreshCoordinator(registry: registry) { [weak self] in
-                await self?.refresh()
+            autoRefreshCoordinator = UsageAutoRefreshCoordinator(registry: registry) { [weak self] request in
+                await self?.refresh(
+                    sourceFilter: request.sourceFilter,
+                    changedPaths: request.changedPaths
+                )
             }
             autoRefreshCoordinator?.start()
         } catch {
@@ -373,32 +380,56 @@ final class AppViewModel: ObservableObject {
         pricingRefreshTimer = timer
     }
 
-    func refresh(syncAfterScan: Bool = false) {
+    func refresh(
+        syncAfterScan: Bool = false,
+        sourceFilter: Set<AgentSourceID> = [],
+        changedPaths: Set<String>? = nil
+    ) {
         refreshQuota()
         guard ingestor != nil else { return }
         guard !isPricingUpdateInProgress else {
-            pendingRefresh = true
-            pendingRefreshIncludesSync = pendingRefreshIncludesSync || syncAfterScan
+            enqueuePendingRefresh(
+                syncAfterScan: syncAfterScan,
+                sourceFilter: sourceFilter,
+                changedPaths: changedPaths
+            )
             return
         }
         guard !isRefreshing else {
-            pendingRefresh = true
-            pendingRefreshIncludesSync = pendingRefreshIncludesSync || syncAfterScan
+            enqueuePendingRefresh(
+                syncAfterScan: syncAfterScan,
+                sourceFilter: sourceFilter,
+                changedPaths: changedPaths
+            )
             return
         }
-        performRefresh(syncAfterScan: syncAfterScan)
+        performRefresh(
+            syncAfterScan: syncAfterScan,
+            sourceFilter: sourceFilter,
+            changedPaths: changedPaths
+        )
     }
 
-    private func performRefresh(syncAfterScan: Bool = false) {
+    private func performRefresh(
+        syncAfterScan: Bool = false,
+        sourceFilter: Set<AgentSourceID> = [],
+        changedPaths: Set<String>? = nil
+    ) {
         guard let ingestor, let aggregation else { return }
         guard !isPricingUpdateInProgress else {
-            pendingRefresh = true
-            pendingRefreshIncludesSync = pendingRefreshIncludesSync || syncAfterScan
+            enqueuePendingRefresh(
+                syncAfterScan: syncAfterScan,
+                sourceFilter: sourceFilter,
+                changedPaths: changedPaths
+            )
             return
         }
         guard !isRefreshing else {
-            pendingRefresh = true
-            pendingRefreshIncludesSync = pendingRefreshIncludesSync || syncAfterScan
+            enqueuePendingRefresh(
+                syncAfterScan: syncAfterScan,
+                sourceFilter: sourceFilter,
+                changedPaths: changedPaths
+            )
             return
         }
         isRefreshing = true
@@ -406,7 +437,10 @@ final class AppViewModel: ObservableObject {
 
         Task {
             do {
-                let summary = try await ingestor.scanOnce()
+                let summary = try await ingestor.scanOnce(
+                    sourceFilter: sourceFilter,
+                    changedPaths: changedPaths
+                )
                 var syncError: String?
                 if syncAfterScan {
                     do {
@@ -417,27 +451,35 @@ final class AppViewModel: ObservableObject {
                 }
                 let discoveredSourceIDs = summary.discoveredSourceIDs.union(
                     (try? concreteEventStore?.knownUsageSourceIDs()) ?? []
-                )
+                ).union(locallyDiscoveredSourceIDs)
                 let configurableSources = Self.descriptors(
                     from: allSourceDescriptors,
                     matching: discoveredSourceIDs
                 )
-                let visibleSourceIDs = Self.visibleSourceIDs(
-                    discovered: discoveredSourceIDs,
-                    hidden: hiddenAgentSourceIDs
-                )
-                let next = try aggregation.dashboardSnapshot(
-                    visibleSourceFilter: visibleSourceIDs,
-                    visibleDeviceFilter: syncController?.visibleDeviceIDs,
-                    modelFilter: selectedModelFilter,
-                    dateRange: selectedDateRange
-                )
+                let shouldReaggregate = summary.insertedEvents > 0 || syncAfterScan
+                let next: UsageDashboardSnapshot?
+                if shouldReaggregate {
+                    let visibleSourceIDs = Self.visibleSourceIDs(
+                        discovered: discoveredSourceIDs,
+                        hidden: hiddenAgentSourceIDs
+                    )
+                    next = try aggregation.dashboardSnapshot(
+                        visibleSourceFilter: visibleSourceIDs,
+                        visibleDeviceFilter: syncController?.visibleDeviceIDs,
+                        modelFilter: selectedModelFilter,
+                        dateRange: selectedDateRange
+                    )
+                } else {
+                    next = nil
+                }
                 await MainActor.run {
                     locallyDiscoveredSourceIDs = discoveredSourceIDs
                     configurableAgentSources = configurableSources
-                    snapshot = next
+                    if let next {
+                        snapshot = next
+                        reloadMenuBarMetric()
+                    }
                     lastError = syncError
-                    reloadMenuBarMetric()
                     finishRefreshCycle()
                 }
             } catch {
@@ -445,6 +487,40 @@ final class AppViewModel: ObservableObject {
                     lastError = error.localizedDescription
                     finishRefreshCycle()
                 }
+            }
+        }
+    }
+
+    private func enqueuePendingRefresh(
+        syncAfterScan: Bool,
+        sourceFilter: Set<AgentSourceID>,
+        changedPaths: Set<String>?
+    ) {
+        let wasPending = pendingRefresh
+        pendingRefresh = true
+        pendingRefreshIncludesSync = pendingRefreshIncludesSync || syncAfterScan
+
+        if let existing = pendingRefreshSourceFilter {
+            if existing.isEmpty || sourceFilter.isEmpty {
+                pendingRefreshSourceFilter = []
+            } else {
+                pendingRefreshSourceFilter = existing.union(sourceFilter)
+            }
+        } else {
+            pendingRefreshSourceFilter = sourceFilter
+        }
+
+        // nil changedPaths means unrestricted file scan. Once unrestricted, stay unrestricted.
+        if changedPaths == nil || pendingRefreshSourceFilter?.isEmpty == true {
+            pendingRefreshChangedPaths = nil
+        } else if let changedPaths {
+            if !wasPending {
+                pendingRefreshChangedPaths = changedPaths
+            } else if let existing = pendingRefreshChangedPaths {
+                pendingRefreshChangedPaths = existing.union(changedPaths)
+            } else {
+                // Already pending as an unrestricted scan.
+                pendingRefreshChangedPaths = nil
             }
         }
     }
@@ -460,7 +536,15 @@ final class AppViewModel: ObservableObject {
             pendingRefresh = false
             let includesSync = pendingRefreshIncludesSync
             pendingRefreshIncludesSync = false
-            performRefresh(syncAfterScan: includesSync)
+            let sourceFilter = pendingRefreshSourceFilter ?? []
+            pendingRefreshSourceFilter = nil
+            let changedPaths = pendingRefreshChangedPaths
+            pendingRefreshChangedPaths = nil
+            performRefresh(
+                syncAfterScan: includesSync,
+                sourceFilter: sourceFilter,
+                changedPaths: changedPaths
+            )
         }
     }
 

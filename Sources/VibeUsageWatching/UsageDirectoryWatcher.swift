@@ -2,19 +2,19 @@ import CoreServices
 import Foundation
 import os
 
-/// Watches adapter log root directories with FSEvents and reports coarse-grained
-/// "something may have changed" signals. Callers should debounce before rescanning.
+/// Watches adapter log root directories with FSEvents and reports changed paths.
+/// Callers should debounce before rescanning and may map paths to source filters.
 final class UsageDirectoryWatcher: @unchecked Sendable {
     private static let logger = Logger(subsystem: "com.vibeusage", category: "DirectoryWatcher")
 
     private let queue = DispatchQueue(label: "com.vibeusage.directory-watcher")
-    private let onChange: @Sendable () -> Void
+    private let onChange: @Sendable ([String]) -> Void
     private let lock = NSLock()
     private var stream: FSEventStreamRef?
     private var paths: [String] = []
     private(set) var isWatching = false
 
-    init(onChange: @escaping @Sendable () -> Void) {
+    init(onChange: @escaping @Sendable ([String]) -> Void) {
         self.onChange = onChange
     }
 
@@ -89,13 +89,28 @@ final class UsageDirectoryWatcher: @unchecked Sendable {
         isWatching = false
     }
 
-    fileprivate func handleChange() {
-        onChange()
+    fileprivate func handleChange(paths: [String]) {
+        onChange(paths)
     }
 
-    private static let eventCallback: FSEventStreamCallback = { _, info, _, _, _, _ in
+    private static let eventCallback: FSEventStreamCallback = {
+        _,
+        info,
+        numEvents,
+        eventPaths,
+        _,
+        _ in
         guard let info else { return }
         let watcher = Unmanaged<UsageDirectoryWatcher>.fromOpaque(info).takeUnretainedValue()
-        watcher.handleChange()
+        watcher.handleChange(paths: extractChangedPaths(from: eventPaths, count: numEvents))
+    }
+}
+
+private func extractChangedPaths(from eventPaths: UnsafeMutableRawPointer?, count: Int) -> [String] {
+    guard count > 0, let eventPaths else { return [] }
+    let cfArray = Unmanaged<CFArray>.fromOpaque(eventPaths).takeUnretainedValue()
+    return (0..<count).compactMap { index in
+        guard let value = CFArrayGetValueAtIndex(cfArray, index) else { return nil }
+        return Unmanaged<CFString>.fromOpaque(value).takeUnretainedValue() as String
     }
 }

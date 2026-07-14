@@ -22,9 +22,9 @@ public struct OpenCodeUsageAdapter: UsageSourceAdapter {
         return discovered(files, sourceID: descriptor.id)
     }
 
-    public func parseIncrementally(fileAt path: String, from _: ParseCheckpoint?, pricing: PricingProvider) throws -> ParseResult {
+    public func parseIncrementally(fileAt path: String, from checkpoint: ParseCheckpoint?, pricing: PricingProvider) throws -> ParseResult {
         if path.hasSuffix(".db") {
-            return try parseOpenCodeDatabase(path: path, descriptor: descriptor, pricing: pricing)
+            return try parseOpenCodeDatabase(path: path, checkpoint: checkpoint, descriptor: descriptor, pricing: pricing)
         }
         let object = try jsonObjectFile(path) as? [String: Any]
         let event = object.flatMap { openCodeEvent(from: $0, path: path, descriptor: descriptor, pricing: pricing) }
@@ -60,13 +60,31 @@ private func openCodeEvent(
     return makeEvent(sourceID: descriptor.id, timestamp: timestamp, sessionID: sessionID, project: "OpenCode", requestID: messageID, model: model, tokens: counts, displayCost: decimal(object["cost"]), pricing: pricing, pricingCandidates: openCodeModelCandidates(model: model, provider: provider), dedupKey: "\(descriptor.id.rawValue):\(messageID ?? path)", path: path, line: nil)
 }
 
-private func parseOpenCodeDatabase(path: String, descriptor: AgentSourceDescriptor, pricing: PricingProvider) throws -> ParseResult {
+private func parseOpenCodeDatabase(
+    path: String,
+    checkpoint: ParseCheckpoint?,
+    descriptor: AgentSourceDescriptor,
+    pricing: PricingProvider
+) throws -> ParseResult {
     let db = try DatabaseQueue(path: path)
     var events: [UsageEvent] = []
+    var watermark = decodeAdapterState(SQLiteRowWatermark.self, from: checkpoint) ?? SQLiteRowWatermark(lastRowID: 0)
+    var maxRowID = watermark.lastRowID
     try db.read { database in
         guard try tableExists("message", in: database) else { return }
-        let rows = try Row.fetchAll(database, sql: "SELECT id, session_id, data FROM message")
+        let currentMax = try Int64.fetchOne(database, sql: "SELECT IFNULL(MAX(rowid), 0) FROM message") ?? 0
+        if currentMax < watermark.lastRowID {
+            watermark.lastRowID = 0
+            maxRowID = 0
+        }
+        let rows = try Row.fetchAll(
+            database,
+            sql: "SELECT rowid, id, session_id, data FROM message WHERE rowid > ? ORDER BY rowid",
+            arguments: [watermark.lastRowID]
+        )
         for row in rows {
+            let rowid = Int64.fromDatabaseValue(row["rowid"]) ?? 0
+            maxRowID = max(maxRowID, rowid)
             guard let data = String.fromDatabaseValue(row["data"]),
                   let object = jsonObject(from: data) else { continue }
             let rowID = String.fromDatabaseValue(row["id"])
@@ -76,7 +94,11 @@ private func parseOpenCodeDatabase(path: String, descriptor: AgentSourceDescript
             }
         }
     }
-    return wholeFileResult(events, path: path)
+    return wholeFileResult(
+        events,
+        path: path,
+        adapterState: encodeAdapterState(SQLiteRowWatermark(lastRowID: maxRowID))
+    )
 }
 
 private func isOpenCodeDatabase(_ url: URL) -> Bool {
