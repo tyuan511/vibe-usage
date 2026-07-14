@@ -3,27 +3,82 @@ import GRDB
 import VibeUsageCore
 import VibeUsagePricing
 
-func parseJSONLines(path: String, checkpoint: ParseCheckpoint?, transform: ([String: Any], Int) -> UsageEvent?) throws -> ParseResult {
-    let data = try Data(contentsOf: URL(fileURLWithPath: path))
-    let start = max(0, Int(checkpoint?.byteOffset ?? 0))
-    guard start <= data.count else {
-        return ParseResult(events: [], newCheckpoint: .start)
+/// Contiguous JSONL bytes plus absolute file offsets for checkpointing.
+struct JSONLByteSlice: Sendable {
+    /// Absolute file offset of `data.startIndex` (usually 0 for full reads, or checkpoint for tails).
+    let baseOffset: Int64
+    let data: Data
+    /// Absolute end offset after this slice (for the next checkpoint).
+    let endOffset: Int64
+
+    var isEmpty: Bool { data.isEmpty }
+}
+
+/// Loads JSONL bytes efficiently:
+/// - full reads use `mappedIfSafe` when possible to avoid copying large files into heap
+/// - incremental reads only load the tail after `checkpoint.byteOffset`
+func loadJSONLBytes(path: String, from checkpoint: ParseCheckpoint?) throws -> JSONLByteSlice {
+    let url = URL(fileURLWithPath: path)
+    let attributes = try FileManager.default.attributesOfItem(atPath: path)
+    let fileSize = (attributes[.size] as? NSNumber)?.int64Value ?? 0
+    let start = max(0, checkpoint?.byteOffset ?? 0)
+
+    guard start <= fileSize else {
+        return JSONLByteSlice(baseOffset: 0, data: Data(), endOffset: 0)
     }
-    var offset = start
-    var lineIndex = checkpoint?.lineIndex ?? 0
-    var events: [UsageEvent] = []
-    while offset < data.count {
-        let lineStart = offset
+    guard start < fileSize else {
+        return JSONLByteSlice(baseOffset: start, data: Data(), endOffset: fileSize)
+    }
+
+    if start == 0 {
+        let data = try Data(contentsOf: url, options: [.mappedIfSafe])
+        return JSONLByteSlice(baseOffset: 0, data: data, endOffset: Int64(data.count))
+    }
+
+    let handle = try FileHandle(forReadingFrom: url)
+    defer { try? handle.close() }
+    try handle.seek(toOffset: UInt64(start))
+    let data = try handle.readToEnd() ?? Data()
+    return JSONLByteSlice(baseOffset: start, data: data, endOffset: start + Int64(data.count))
+}
+
+func forEachJSONLLine(
+    in slice: JSONLByteSlice,
+    startingLineIndex: Int,
+    body: (_ line: Data, _ absoluteLineStart: Int64, _ lineIndex: Int) throws -> Void
+) rethrows {
+    var relativeOffset = 0
+    var lineIndex = startingLineIndex
+    let data = slice.data
+    while relativeOffset < data.count {
+        let lineStart = relativeOffset
         let newline = data[lineStart...].firstIndex(of: 0x0A) ?? data.count
         let lineEnd = newline
-        offset = newline < data.count ? newline + 1 : data.count
+        relativeOffset = newline < data.count ? newline + 1 : data.count
         defer { lineIndex += 1 }
-        guard lineEnd > lineStart,
-              let object = try? JSONSerialization.jsonObject(with: data[lineStart..<lineEnd]) as? [String: Any],
-              let event = transform(object, lineIndex + 1) else { continue }
+        try body(data[lineStart..<lineEnd], slice.baseOffset + Int64(lineStart), lineIndex)
+    }
+}
+
+func parseJSONLines(path: String, checkpoint: ParseCheckpoint?, transform: ([String: Any], Int) -> UsageEvent?) throws -> ParseResult {
+    let slice = try loadJSONLBytes(path: path, from: checkpoint)
+    if slice.endOffset == 0, (checkpoint?.byteOffset ?? 0) > 0 {
+        return ParseResult(events: [], newCheckpoint: .start)
+    }
+
+    var lineIndex = checkpoint?.lineIndex ?? 0
+    var events: [UsageEvent] = []
+    forEachJSONLLine(in: slice, startingLineIndex: lineIndex) { line, _, currentLineIndex in
+        lineIndex = currentLineIndex + 1
+        guard !line.isEmpty,
+              let object = try? JSONSerialization.jsonObject(with: line) as? [String: Any],
+              let event = transform(object, currentLineIndex + 1) else { return }
         events.append(event)
     }
-    return ParseResult(events: events, newCheckpoint: ParseCheckpoint(byteOffset: Int64(data.count), lineIndex: lineIndex))
+    return ParseResult(
+        events: events,
+        newCheckpoint: ParseCheckpoint(byteOffset: slice.endOffset, lineIndex: lineIndex)
+    )
 }
 
 func makeEvent(
@@ -93,9 +148,40 @@ func discovered(_ urls: [URL], sourceID: AgentSourceID) -> [DiscoveredFile] {
     dedup(urls).sorted { $0.path < $1.path }.map { DiscoveredFile(path: $0.path, sourceID: sourceID) }
 }
 
-func wholeFileResult(_ events: [UsageEvent], path: String) -> ParseResult {
+func wholeFileResult(_ events: [UsageEvent], path: String, adapterState: Data? = nil) -> ParseResult {
     let size = (try? FileManager.default.attributesOfItem(atPath: path)[.size] as? NSNumber)?.int64Value ?? 0
-    return ParseResult(events: events, newCheckpoint: ParseCheckpoint(byteOffset: size, lineIndex: 0))
+    return ParseResult(
+        events: events,
+        newCheckpoint: ParseCheckpoint(byteOffset: size, lineIndex: 0, adapterState: adapterState)
+    )
+}
+
+// MARK: - SQLite incremental helpers
+
+struct SQLiteRowWatermark: Codable, Sendable, Equatable {
+    var lastRowID: Int64
+}
+
+struct SQLiteSessionFingerprints: Codable, Sendable, Equatable {
+    var sessions: [String: String]
+}
+
+func decodeAdapterState<T: Decodable>(_ type: T.Type, from checkpoint: ParseCheckpoint?) -> T? {
+    guard let data = checkpoint?.adapterState else { return nil }
+    return try? JSONDecoder().decode(type, from: data)
+}
+
+func encodeAdapterState<T: Encodable>(_ value: T) -> Data? {
+    try? JSONEncoder().encode(value)
+}
+
+func sessionFingerprint(
+    model: String,
+    tokens: TokenCounts,
+    cost: Decimal?
+) -> String {
+    let costText = cost.map { "\($0)" } ?? ""
+    return "\(model)|\(tokens.input)|\(tokens.output)|\(tokens.cacheCreate)|\(tokens.cacheRead)|\(tokens.reasoning)|\(costText)"
 }
 
 func makeDescriptor(_ id: String, _ displayName: String, _ shortLabel: String, _ icon: String, _ tint: String, _ order: Int) -> AgentSourceDescriptor {

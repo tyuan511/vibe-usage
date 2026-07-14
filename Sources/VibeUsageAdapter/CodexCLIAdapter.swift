@@ -58,9 +58,8 @@ public struct CodexCLIAdapter: UsageSourceAdapter {
         from checkpoint: ParseCheckpoint?,
         pricing: PricingProvider
     ) throws -> ParseResult {
-        let start = max(0, Int(checkpoint?.byteOffset ?? 0))
-        let data = try Data(contentsOf: URL(fileURLWithPath: path))
-        guard start <= data.count else {
+        let slice = try loadJSONLBytes(path: path, from: checkpoint)
+        if slice.endOffset == 0, (checkpoint?.byteOffset ?? 0) > 0 {
             return ParseResult(events: [], newCheckpoint: .start)
         }
 
@@ -69,36 +68,37 @@ public struct CodexCLIAdapter: UsageSourceAdapter {
         if state.forkReplayProcessed == true {
             replayMatch = .complete
         } else {
-            replayMatch = Self.forkReplayMatch(in: data, fileAt: path)
+            // Fork replay matching needs the child file prefix (session_meta + early token events).
+            let prefixData: Data
+            if slice.baseOffset == 0 {
+                prefixData = slice.data
+            } else {
+                prefixData = try loadJSONLBytes(path: path, from: nil).data
+            }
+            replayMatch = Self.forkReplayMatch(in: prefixData, fileAt: path)
             state.forkReplayProcessed = replayMatch.isComplete
         }
-        var offset = start
         var lineIndex = checkpoint?.lineIndex ?? 0
         var events: [UsageEvent] = []
         let sessionID = Self.sessionID(from: path)
         let workspace = Self.workspace(from: path)
 
-        while offset < data.count {
-            let lineStart = offset
-            let newline = data[lineStart...].firstIndex(of: 0x0A) ?? data.count
-            let lineEnd = newline
-            offset = newline < data.count ? newline + 1 : data.count
-            defer { lineIndex += 1 }
-
-            guard let object = try? JSONSerialization.jsonObject(with: data[lineStart..<lineEnd]) as? [String: Any] else {
-                continue
+        forEachJSONLLine(in: slice, startingLineIndex: lineIndex) { line, _, currentLineIndex in
+            lineIndex = currentLineIndex + 1
+            guard let object = try? JSONSerialization.jsonObject(with: line) as? [String: Any] else {
+                return
             }
 
             if let model = Self.turnContextModel(from: object) {
                 state.currentModel = model
                 state.currentModelIsFallback = false
-                continue
+                return
             }
 
-            guard let parsed = Self.tokenUsageEvent(from: object, state: &state) else { continue }
-            guard !replayMatch.lineIndexes.contains(lineIndex + 1) else { continue }
-            guard let timestamp = Date.vibeUsageParse(parsed.timestamp) else { continue }
-            guard let rawModel = parsed.model.nonEmpty else { continue }
+            guard let parsed = Self.tokenUsageEvent(from: object, state: &state) else { return }
+            guard !replayMatch.lineIndexes.contains(currentLineIndex + 1) else { return }
+            guard let timestamp = Date.vibeUsageParse(parsed.timestamp) else { return }
+            guard let rawModel = parsed.model.nonEmpty else { return }
 
             let modelFamily = ModelAliasResolver.resolveFamily(fromRawModel: rawModel)
             let cachedInput = min(parsed.usage.cachedInputTokens, parsed.usage.inputTokens)
@@ -109,7 +109,7 @@ public struct CodexCLIAdapter: UsageSourceAdapter {
                 cacheRead: cachedInput,
                 reasoning: parsed.usage.reasoningOutputTokens
             )
-            guard tokens.input + tokens.output + tokens.cacheRead + tokens.reasoning > 0 else { continue }
+            guard tokens.input + tokens.output + tokens.cacheRead + tokens.reasoning > 0 else { return }
 
             let rate = pricing.rate(forModelFamily: modelFamily)
             let cost = rate.map { CostCalculator.cost(for: tokens, sourceID: descriptor.id, rate: $0) } ?? 0
@@ -127,14 +127,14 @@ public struct CodexCLIAdapter: UsageSourceAdapter {
                 costIsEstimated: parsed.isFallbackModel || rate == nil,
                 dedupKey: Self.dedupKey(timestamp: parsed.timestamp, model: modelFamily, usage: parsed.usage),
                 sourceFilePath: path,
-                sourceFileLine: lineIndex + 1
+                sourceFileLine: currentLineIndex + 1
             ))
         }
 
         let stateData = try? JSONEncoder().encode(state)
         return ParseResult(
             events: events,
-            newCheckpoint: ParseCheckpoint(byteOffset: Int64(data.count), lineIndex: lineIndex, adapterState: stateData)
+            newCheckpoint: ParseCheckpoint(byteOffset: slice.endOffset, lineIndex: lineIndex, adapterState: stateData)
         )
     }
 
@@ -187,7 +187,7 @@ public struct CodexCLIAdapter: UsageSourceAdapter {
             return .complete
         }
         guard let parentPath = parentSessionPath(parentID: parentID, childPath: childPath),
-              let parentData = try? Data(contentsOf: URL(fileURLWithPath: parentPath)) else {
+              let parentData = try? loadJSONLBytes(path: parentPath, from: nil).data else {
             return .pending
         }
 

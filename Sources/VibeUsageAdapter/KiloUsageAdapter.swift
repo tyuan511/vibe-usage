@@ -16,18 +16,36 @@ public struct KiloUsageAdapter: UsageSourceAdapter {
         discovered(roots.map { $0.appendingPathComponent("kilo.db") }.filter(\.isRegularFile), sourceID: descriptor.id)
     }
 
-    public func parseIncrementally(fileAt path: String, from _: ParseCheckpoint?, pricing: PricingProvider) throws -> ParseResult {
-        try wholeFileResult(parseKiloDatabase(path: path, descriptor: descriptor, pricing: pricing), path: path)
+    public func parseIncrementally(fileAt path: String, from checkpoint: ParseCheckpoint?, pricing: PricingProvider) throws -> ParseResult {
+        try parseKiloDatabase(path: path, checkpoint: checkpoint, descriptor: descriptor, pricing: pricing)
     }
 }
 
-private func parseKiloDatabase(path: String, descriptor: AgentSourceDescriptor, pricing: PricingProvider) throws -> [UsageEvent] {
+private func parseKiloDatabase(
+    path: String,
+    checkpoint: ParseCheckpoint?,
+    descriptor: AgentSourceDescriptor,
+    pricing: PricingProvider
+) throws -> ParseResult {
     let db = try DatabaseQueue(path: path)
-    return try db.read { database in
-        var events: [UsageEvent] = []
-        guard try tableExists("message", in: database) else { return events }
-        let rows = try Row.fetchAll(database, sql: "SELECT id, session_id, data FROM message")
+    var events: [UsageEvent] = []
+    var watermark = decodeAdapterState(SQLiteRowWatermark.self, from: checkpoint) ?? SQLiteRowWatermark(lastRowID: 0)
+    var maxRowID = watermark.lastRowID
+    try db.read { database in
+        guard try tableExists("message", in: database) else { return }
+        let currentMax = try Int64.fetchOne(database, sql: "SELECT IFNULL(MAX(rowid), 0) FROM message") ?? 0
+        if currentMax < watermark.lastRowID {
+            watermark.lastRowID = 0
+            maxRowID = 0
+        }
+        let rows = try Row.fetchAll(
+            database,
+            sql: "SELECT rowid, id, session_id, data FROM message WHERE rowid > ? ORDER BY rowid",
+            arguments: [watermark.lastRowID]
+        )
         for row in rows {
+            let rowid = Int64.fromDatabaseValue(row["rowid"]) ?? 0
+            maxRowID = max(maxRowID, rowid)
             guard let data = String.fromDatabaseValue(row["data"]),
                   let object = jsonObject(from: data) else { continue }
             let rowID = String.fromDatabaseValue(row["id"]) ?? "\(path):message"
@@ -36,8 +54,12 @@ private func parseKiloDatabase(path: String, descriptor: AgentSourceDescriptor, 
                 events.append(event)
             }
         }
-        return events
     }
+    return wholeFileResult(
+        events,
+        path: path,
+        adapterState: encodeAdapterState(SQLiteRowWatermark(lastRowID: maxRowID))
+    )
 }
 
 private func kiloEvent(from object: [String: Any], rowID: String, rowSessionID: String, path: String, descriptor: AgentSourceDescriptor, pricing: PricingProvider) -> UsageEvent? {

@@ -289,6 +289,33 @@ import VibeUsagePricing
     #expect(event.model == "claude-sonnet-4-20250514")
     #expect(event.tokens == TokenCounts(input: 100, output: 50, cacheCreate: 20, cacheRead: 10))
     #expect(event.costUSD == Decimal(string: "0.02"))
+
+    let second = try adapter.parseIncrementally(
+        fileAt: database.url.path,
+        from: result.newCheckpoint,
+        pricing: BundledPricingProvider()
+    )
+    #expect(second.events.isEmpty)
+
+    try database.queue.write { db in
+        try db.execute(
+            sql: "INSERT INTO message (id, session_id, data) VALUES (?, ?, ?)",
+            arguments: [
+                "row-msg-2",
+                "session-a",
+                """
+                {"id":"embedded-msg-2","providerID":"anthropic","modelID":"claude-sonnet-4-20250514","time":{"created":1767312060000},"tokens":{"input":10,"output":5},"cost":0.01}
+                """
+            ]
+        )
+    }
+    let third = try adapter.parseIncrementally(
+        fileAt: database.url.path,
+        from: result.newCheckpoint,
+        pricing: BundledPricingProvider()
+    )
+    #expect(third.events.count == 1)
+    #expect(third.events.first?.requestID == "row-msg-2")
 }
 
 @Test func openCodeAdapterUsesCcusageModelCandidatesForPricing() throws {
@@ -381,6 +408,31 @@ import VibeUsagePricing
     #expect(event.sessionID == "session-a")
     #expect(event.model == "claude-sonnet-4-20250514")
     #expect(event.tokens == TokenCounts(input: 100, output: 50, reasoning: 30))
+
+    let second = try adapter.parseIncrementally(
+        fileAt: database.url.path,
+        from: result.newCheckpoint,
+        pricing: BundledPricingProvider()
+    )
+    #expect(second.events.isEmpty)
+
+    try database.queue.write { db in
+        try db.execute(
+            sql: """
+            UPDATE sessions
+            SET accumulated_input_tokens = 120, accumulated_output_tokens = 60, accumulated_total_tokens = 210
+            WHERE id = ?
+            """,
+            arguments: ["session-a"]
+        )
+    }
+    let third = try adapter.parseIncrementally(
+        fileAt: database.url.path,
+        from: result.newCheckpoint,
+        pricing: BundledPricingProvider()
+    )
+    #expect(third.events.count == 1)
+    #expect(third.events.first?.tokens == TokenCounts(input: 120, output: 60, reasoning: 30))
 }
 
 @Test func droidAdapterFallsBackToSidecarModel() throws {
