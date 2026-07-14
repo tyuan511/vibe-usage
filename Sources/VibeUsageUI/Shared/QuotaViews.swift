@@ -175,6 +175,7 @@ struct SubscriptionTierBadge: View {
 /// tinted by utilization (green < 70%, amber 70-90%, red > 90%).
 struct QuotaWindowBar: View {
     let window: QuotaWindow
+    @Environment(\.menuBarExportMode) private var isExporting
 
     private var tint: Color {
         switch window.usedFraction {
@@ -206,11 +207,29 @@ struct QuotaWindowBar: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
+            progressBar
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    @ViewBuilder
+    private var progressBar: some View {
+        if isExporting {
+            GeometryReader { proxy in
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(Color.secondary.opacity(0.16))
+                    Capsule()
+                        .fill(tint)
+                        .frame(width: proxy.size.width * CGFloat(window.usedFraction))
+                }
+            }
+            .frame(height: 4)
+        } else {
             ProgressView(value: window.usedFraction)
                 .progressViewStyle(.linear)
                 .tint(tint)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 

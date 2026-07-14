@@ -42,7 +42,7 @@ struct MenuMetricCard: View {
         }
         .padding(10)
         .frame(maxWidth: .infinity, minHeight: 62, alignment: .leading)
-        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 12))
+        .menuCard(in: RoundedRectangle(cornerRadius: 12))
     }
 }
 
@@ -68,7 +68,7 @@ struct MenuEmptyState: View {
             .font(.callout)
             .foregroundStyle(.secondary)
             .frame(maxWidth: .infinity, minHeight: 42)
-            .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 12))
+            .menuCard(in: RoundedRectangle(cornerRadius: 12))
     }
 }
 
@@ -82,6 +82,7 @@ struct MenuScrollList<Content: View>: View {
 
     @State private var canScrollUp = false
     @State private var canScrollDown = false
+    @Environment(\.menuBarExportMode) private var isExporting
 
     private static var fadeHeight: CGFloat { 18 }
 
@@ -90,25 +91,33 @@ struct MenuScrollList<Content: View>: View {
         self.content = content()
     }
 
+    @ViewBuilder
     var body: some View {
-        ScrollView(.vertical) {
+        if isExporting {
             content
+                .frame(maxWidth: .infinity, alignment: .top)
+                .frame(height: height, alignment: .top)
+                .clipped()
+        } else {
+            ScrollView(.vertical) {
+                content
+            }
+            .scrollIndicators(.never)
+            .frame(height: height)
+            .onScrollGeometryChange(for: EdgeState.self) { geometry in
+                EdgeState(
+                    canScrollUp: geometry.contentOffset.y > 1,
+                    canScrollDown: geometry.contentOffset.y + geometry.containerSize.height
+                        < geometry.contentSize.height - 1
+                )
+            } action: { _, state in
+                canScrollUp = state.canScrollUp
+                canScrollDown = state.canScrollDown
+            }
+            .mask(fadeMask)
+            .animation(.easeInOut(duration: 0.15), value: canScrollUp)
+            .animation(.easeInOut(duration: 0.15), value: canScrollDown)
         }
-        .scrollIndicators(.never)
-        .frame(height: height)
-        .onScrollGeometryChange(for: EdgeState.self) { geometry in
-            EdgeState(
-                canScrollUp: geometry.contentOffset.y > 1,
-                canScrollDown: geometry.contentOffset.y + geometry.containerSize.height
-                    < geometry.contentSize.height - 1
-            )
-        } action: { _, state in
-            canScrollUp = state.canScrollUp
-            canScrollDown = state.canScrollDown
-        }
-        .mask(fadeMask)
-        .animation(.easeInOut(duration: 0.15), value: canScrollUp)
-        .animation(.easeInOut(duration: 0.15), value: canScrollDown)
     }
 
     private var fadeMask: some View {

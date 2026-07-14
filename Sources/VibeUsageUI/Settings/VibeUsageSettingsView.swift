@@ -317,25 +317,34 @@ public struct VibeUsageSettingsView: View {
 
             if !sync.devices.isEmpty {
                 ForEach(sync.devices) { device in
-                    HStack(spacing: 8) {
+                    HStack(alignment: .center, spacing: 8) {
                         if device.isLocal {
-                            Image(systemName: "checkmark.square.fill")
-                                .foregroundStyle(.secondary)
-                                .accessibilityHidden(true)
-                            syncDeviceLabel(device)
+                            Toggle(isOn: .constant(true)) {
+                                syncDeviceLabel(device)
+                            }
+                            .toggleStyle(.checkbox)
+                            .disabled(true)
                         } else {
                             Toggle(isOn: syncDeviceVisibilityBinding(device.id)) {
                                 syncDeviceLabel(device)
                             }
                             .toggleStyle(.checkbox)
                         }
-                        if !device.isLocal {
+
+                        Spacer(minLength: 8)
+
+                        if device.isLocal {
+                            Text(UIStrings.text(zh: "此 Mac", en: "This Mac"))
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        } else {
                             Button {
                                 pendingDeviceDeletion = device
                             } label: {
                                 Image(systemName: "trash")
                             }
                             .buttonStyle(.borderless)
+                            .frame(width: 24, height: 24)
                             .help(UIStrings.text(zh: "删除远端历史", en: "Delete Remote History"))
                         }
                     }
@@ -363,14 +372,7 @@ public struct VibeUsageSettingsView: View {
     @ViewBuilder
     private func syncDeviceLabel(_ device: SyncSettingsPresentation.Device) -> some View {
         VStack(alignment: .leading, spacing: 1) {
-            HStack(spacing: 6) {
-                Text(device.name)
-                if device.isLocal {
-                    Text(UIStrings.text(zh: "此 Mac", en: "This Mac"))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
+            Text(device.name)
             if let lastSyncedAt = device.lastSyncedAt {
                 Text(UIStrings.updated(lastSyncedAt))
                     .font(.caption)

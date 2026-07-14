@@ -24,4 +24,9 @@ import VibeUsageAggregation
         #expect(MenuBarMetricFormatter.values(for: .usage, totals: zero) == .init(tokens: "0K", spend: "$0"))
         #expect(MenuBarMetricFormatter.values(for: .usage, totals: usage) == .init(tokens: "12.3K", spend: "$3.2"))
     }
+
+    @Test func usesCompactEnglishCacheLabel() {
+        #expect(UIStrings.cacheReadLabel(isChinesePreferred: false) == "Cache")
+        #expect(UIStrings.cacheReadLabel(isChinesePreferred: true) == "缓存")
+    }
 }

@@ -24,6 +24,8 @@ public struct MenuBarUsageView: View {
     let onQuotaDisconnect: (AgentSourceID) -> Void
     let onQuotaCancelConnect: (AgentSourceID) -> Void
     @State private var shareAnchorView: NSView?
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.menuBarExportMode) private var isExporting
 
     public init(
         snapshot: UsageDashboardSnapshot,
@@ -69,7 +71,7 @@ public struct MenuBarUsageView: View {
         VStack(alignment: .leading, spacing: 12) {
             menuHeader
 
-            GlassEffectContainer {
+            MenuGlassEffectContainer {
                 HStack(spacing: 8) {
                     MenuMetricCard(
                         title: UIStrings.spend,
@@ -95,9 +97,7 @@ public struct MenuBarUsageView: View {
             if !snapshot.devices.isEmpty {
                 VStack(alignment: .leading, spacing: 7) {
                     MenuSectionTitle(UIStrings.devices)
-                    ForEach(snapshot.devices) { device in
-                        DeviceMetricRow(device: device)
-                    }
+                    devicesList
                 }
             }
 
@@ -113,7 +113,9 @@ public struct MenuBarUsageView: View {
                 modelsList
             }
 
-            menuFooter
+            if !isExporting {
+                menuFooter
+            }
         }
         .padding(14)
         .frame(width: 388)
@@ -143,38 +145,64 @@ public struct MenuBarUsageView: View {
 
             Spacer(minLength: 8)
 
-            GlassEffectContainer {
-                HStack(spacing: 7) {
-                    dateRangeMenu
+            if isExporting {
+                exportDateRange
+            } else {
+                MenuGlassEffectContainer {
+                    HStack(spacing: 7) {
+                        dateRangeMenu
 
-                    shareMenu
-                        .background(ShareAnchorCapture(anchorView: $shareAnchorView))
+                        anchoredShareMenu
 
-                    Button(action: onOpenSettings) {
-                        Image(systemName: "gearshape")
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundStyle(Color(nsColor: .secondaryLabelColor))
-                            .frame(width: 18, height: 18)
+                        Button(action: onOpenSettings) {
+                            Image(systemName: "gearshape")
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundStyle(Color(nsColor: .secondaryLabelColor))
+                                .frame(width: 18, height: 18)
+                        }
+                        .buttonStyle(.plain)
+                        .controlSize(.small)
+                        .frame(width: 28, height: 28)
+                        .help(UIStrings.text(zh: "设置", en: "Settings"))
+
+                        Button(action: onRefresh) {
+                            Image(systemName: isRefreshing ? "hourglass" : "arrow.clockwise")
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundStyle(Color(nsColor: .secondaryLabelColor))
+                                .frame(width: 18, height: 18)
+                        }
+                        .buttonStyle(.plain)
+                        .controlSize(.small)
+                        .frame(width: 28, height: 28)
+                        .disabled(isRefreshing)
+                        .help(UIStrings.refresh)
                     }
-                    .buttonStyle(.plain)
-                    .controlSize(.small)
-                    .frame(width: 28, height: 28)
-                    .help(UIStrings.text(zh: "设置", en: "Settings"))
-
-                    Button(action: onRefresh) {
-                        Image(systemName: isRefreshing ? "hourglass" : "arrow.clockwise")
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundStyle(Color(nsColor: .secondaryLabelColor))
-                            .frame(width: 18, height: 18)
-                    }
-                    .buttonStyle(.plain)
-                    .controlSize(.small)
-                    .frame(width: 28, height: 28)
-                    .disabled(isRefreshing)
-                    .help(UIStrings.refresh)
                 }
             }
         }
+    }
+
+    private var exportDateRange: some View {
+        VStack(alignment: .trailing, spacing: 2) {
+            Text("\(UIStrings.text(zh: "统计时间段", en: "Period")) · \(selectedDateRange.displayName)")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Text(exportDateRangeText)
+                .font(.caption.monospacedDigit().weight(.medium))
+                .lineLimit(1)
+        }
+    }
+
+    private var exportDateRangeText: String {
+        if snapshot.rangeStartDay == snapshot.rangeEndDay {
+            return snapshot.rangeEndDay
+        }
+        return "\(snapshot.rangeStartDay) – \(snapshot.rangeEndDay)"
+    }
+
+    private var anchoredShareMenu: some View {
+        shareMenu
+            .background(ShareAnchorCapture(anchorView: $shareAnchorView))
     }
 
     private var shareMenu: some View {
@@ -183,10 +211,7 @@ public struct MenuBarUsageView: View {
             Button(UIStrings.text(zh: "拷贝图片", en: "Copy Image"), action: copyImage)
             Button(UIStrings.text(zh: "分享…", en: "Share…"), action: shareImage)
         } label: {
-            Image(systemName: "square.and.arrow.up")
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(Color(nsColor: .secondaryLabelColor))
-                .frame(width: 18, height: 18)
+            shareMenuLabel
         }
         .menuIndicator(.hidden)
         .buttonStyle(.plain)
@@ -196,14 +221,52 @@ public struct MenuBarUsageView: View {
         .help(UIStrings.text(zh: "导出图片", en: "Export image"))
     }
 
-    private func exportPNGData() async -> Data? {
-        guard let window = shareAnchorView?.window ?? NSApp.keyWindow else { return nil }
-        return await MenuBarImageExporter.renderPNGData(window: window)
+    private var shareMenuLabel: some View {
+        Image(systemName: "square.and.arrow.up")
+            .font(.system(size: 13, weight: .medium))
+            .foregroundStyle(Color(nsColor: .secondaryLabelColor))
+            .frame(width: 18, height: 18)
+    }
+
+    private func exportPNGData() -> Data? {
+        let scale = shareAnchorView?.window?.backingScaleFactor
+            ?? NSScreen.main?.backingScaleFactor
+            ?? 2
+        return MenuBarImageExporter.renderPNGData(
+            colorScheme: colorScheme,
+            scale: scale
+        ) {
+            exportView
+        }
+    }
+
+    private var exportView: some View {
+        MenuBarUsageView(
+            snapshot: snapshot,
+            isRefreshing: isRefreshing,
+            lastError: lastError,
+            quota: quota,
+            quotaConnectUIStates: quotaConnectUIStates,
+            selectedDateRange: .constant(selectedDateRange),
+            selectedModelFilter: .constant(selectedModelFilter),
+            hiddenQuotaSourceIDs: hiddenQuotaSourceIDs,
+            onRefresh: {},
+            onFilterChange: {},
+            onOpenSettings: {},
+            onQuit: {},
+            availableUpdateVersion: availableUpdateVersion,
+            canCheckForUpdates: canCheckForUpdates,
+            onCheckForUpdates: {},
+            onQuotaConnect: { _ in },
+            onQuotaDisconnect: { _ in },
+            onQuotaCancelConnect: { _ in }
+        )
+        .fixedSize(horizontal: false, vertical: true)
     }
 
     private func saveImage() {
         Task {
-            guard let data = await exportPNGData() else { return }
+            guard let data = exportPNGData() else { return }
             imageSaveAction.run(
                 data: data,
                 defaultFilename: "VibeUsage-\(snapshot.rangeEndDay).png"
@@ -228,7 +291,7 @@ public struct MenuBarUsageView: View {
 
     private func copyImage() {
         Task {
-            guard let data = await exportPNGData() else { return }
+            guard let data = exportPNGData() else { return }
             let pasteboard = NSPasteboard.general
             pasteboard.clearContents()
             pasteboard.setData(data, forType: .png)
@@ -240,7 +303,7 @@ public struct MenuBarUsageView: View {
 
     private func shareImage() {
         Task {
-            guard let data = await exportPNGData(), let image = NSImage(data: data) else { return }
+            guard let data = exportPNGData(), let image = NSImage(data: data) else { return }
             let picker = NSSharingServicePicker(items: [image])
             if let anchorView = shareAnchorView {
                 picker.show(relativeTo: anchorView.bounds, of: anchorView, preferredEdge: .minY)
@@ -289,7 +352,7 @@ public struct MenuBarUsageView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(10)
-                .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 12))
+                .menuCard(in: RoundedRectangle(cornerRadius: 12))
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -361,10 +424,10 @@ public struct MenuBarUsageView: View {
             MenuScrollList(height: Self.modelsMaxScrollHeight) {
                 modelsListContent
             }
-            .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 12))
+            .menuCard(in: RoundedRectangle(cornerRadius: 12))
         } else {
             modelsListContent
-                .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 12))
+                .menuCard(in: RoundedRectangle(cornerRadius: 12))
         }
     }
 
@@ -390,7 +453,20 @@ public struct MenuBarUsageView: View {
             }
         }
         .padding(8)
-        .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 12))
+        .menuCard(in: RoundedRectangle(cornerRadius: 12))
+    }
+
+    private var devicesList: some View {
+        VStack(spacing: 0) {
+            ForEach(Array(snapshot.devices.enumerated()), id: \.element.id) { index, device in
+                DeviceMetricRow(device: device)
+                if index < snapshot.devices.count - 1 {
+                    Divider().padding(.leading, 26)
+                }
+            }
+        }
+        .padding(8)
+        .menuCard(in: RoundedRectangle(cornerRadius: 12))
     }
 
     private var menuFooter: some View {

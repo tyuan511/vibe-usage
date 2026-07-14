@@ -67,7 +67,7 @@ struct ActivityHeatmap: View {
             }
             .padding(10)
             .frame(maxWidth: .infinity, minHeight: heatmapHeight, maxHeight: heatmapHeight)
-            .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 12))
+            .menuCard(in: RoundedRectangle(cornerRadius: 12))
 
         }
     }

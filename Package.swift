@@ -128,7 +128,7 @@ let package = Package(
         ),
         .testTarget(
             name: "VibeUsageUITests",
-            dependencies: ["VibeUsageUI"]
+            dependencies: ["VibeUsageUI", "VibeUsageQuota"]
         ),
 
         // MARK: - App (composition root: only place that imports concrete adapters)
@@ -149,7 +149,16 @@ let package = Package(
         ),
         .testTarget(
             name: "VibeUsageAppTests",
-            dependencies: ["VibeUsageApp", "VibeUsageUI"]
+            dependencies: ["VibeUsageApp", "VibeUsageUI"],
+            linkerSettings: [
+                // Binary frameworks are emitted beside the test bundle, but
+                // SwiftPM does not add that product directory to the bundle's
+                // runtime search paths.
+                .unsafeFlags([
+                    "-Xlinker", "-rpath",
+                    "-Xlinker", "@loader_path/../../.."
+                ])
+            ]
         ),
 
         .executableTarget(

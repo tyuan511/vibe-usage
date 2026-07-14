@@ -1,4 +1,3 @@
-import AppKit
 import SwiftUI
 import VibeUsageAdapter
 import VibeUsageAggregation
@@ -13,11 +12,15 @@ struct VibeUsagePreviewRenderer {
         let arguments = Array(CommandLine.arguments.dropFirst())
         let outputPath = arguments.first(where: { !$0.hasPrefix("--") })
             ?? "docs/usage-share-preview.png"
+        let colorScheme: ColorScheme = arguments.contains("--light") ? .light : .dark
 
-        try await renderMenuBar(outputPath: outputPath)
+        try await renderMenuBar(outputPath: outputPath, colorScheme: colorScheme)
     }
 
-    private static func renderMenuBar(outputPath: String) async throws {
+    private static func renderMenuBar(
+        outputPath: String,
+        colorScheme: ColorScheme
+    ) async throws {
         let view = MenuBarUsageView(
             snapshot: makeDashboardSnapshot(),
             isRefreshing: false,
@@ -32,39 +35,16 @@ struct VibeUsagePreviewRenderer {
             onQuit: {}
         )
         .environment(\.locale, Locale(identifier: "zh_Hans_CN"))
+        .environment(\.colorScheme, colorScheme)
         .fixedSize(horizontal: false, vertical: true)
 
-        let hostingView = NSHostingView(rootView: view)
-        hostingView.frame = NSRect(x: 0, y: 0, width: 388, height: 1_200)
-        hostingView.layoutSubtreeIfNeeded()
-        let size = NSSize(width: 388, height: hostingView.fittingSize.height)
-        hostingView.frame = NSRect(origin: .zero, size: size)
-
-        let effectView = NSVisualEffectView(frame: NSRect(origin: .zero, size: size))
-        effectView.material = .popover
-        effectView.blendingMode = .behindWindow
-        effectView.state = .active
-        hostingView.autoresizingMask = [.width, .height]
-        effectView.addSubview(hostingView)
-
-        let window = NSWindow(
-            contentRect: NSRect(origin: .zero, size: size),
-            styleMask: [.borderless],
-            backing: .buffered,
-            defer: false
-        )
-        window.isReleasedWhenClosed = false
-        window.appearance = NSAppearance(named: .darkAqua)
-        window.backgroundColor = .clear
-        window.isOpaque = false
-        window.contentView = effectView
-        window.orderFrontRegardless()
-        try await Task.sleep(for: .milliseconds(100))
-
-        guard let data = await MenuBarImageExporter.renderPNGData(window: window) else {
+        guard let data = MenuBarImageExporter.renderPNGData(
+            colorScheme: colorScheme,
+            scale: 2,
+            content: { view }
+        ) else {
             throw RenderError.pngEncodingFailed
         }
-        window.orderOut(nil)
 
         let outputURL = URL(fileURLWithPath: outputPath)
         try FileManager.default.createDirectory(

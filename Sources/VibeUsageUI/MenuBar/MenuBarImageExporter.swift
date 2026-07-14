@@ -1,58 +1,33 @@
 import AppKit
-import ScreenCaptureKit
+import SwiftUI
 
 @MainActor
 public enum MenuBarImageExporter {
-    public static func renderPNGData(window: NSWindow) async -> Data? {
-        let usesLightAppearance = window.effectiveAppearance.bestMatch(
-            from: [.aqua, .darkAqua]
-        ) == .aqua
-        let originalBackgroundColor = window.backgroundColor
-        let wasOpaque = window.isOpaque
-        let adjustedEffectViews = usesLightAppearance
-            ? visualEffectViews(in: window.contentView).filter { $0.blendingMode == .behindWindow }
-            : []
-        if usesLightAppearance {
-            window.backgroundColor = .white
-            window.isOpaque = true
-            adjustedEffectViews.forEach { $0.blendingMode = .withinWindow }
-        }
-        defer {
-            adjustedEffectViews.forEach { $0.blendingMode = .behindWindow }
-            if usesLightAppearance {
-                window.backgroundColor = originalBackgroundColor
-                window.isOpaque = wasOpaque
-                window.displayIfNeeded()
-            }
-        }
-        if usesLightAppearance {
-            window.displayIfNeeded()
-            await Task.yield()
-        }
+    public static func renderPNGData<Content: View>(
+        colorScheme: ColorScheme,
+        scale: CGFloat,
+        @ViewBuilder content: () -> Content
+    ) -> Data? {
+        let background = colorScheme == .light
+            ? Color.white
+            : Color(red: 0.12, green: 0.12, blue: 0.12)
+        let exportContent = content()
+            .environment(\.menuBarExportMode, true)
+            .environment(\.colorScheme, colorScheme)
+            .background(background)
 
-        guard let content = try? await SCShareableContent.currentProcess,
-              let shareableWindow = content.windows.first(where: {
-                  $0.windowID == CGWindowID(window.windowNumber)
-              }) else { return nil }
+        let renderer = ImageRenderer(content: exportContent)
+        renderer.scale = max(1, scale)
+        renderer.isOpaque = true
 
-        let filter = SCContentFilter(desktopIndependentWindow: shareableWindow)
-        let configuration = SCStreamConfiguration()
-        let scale = CGFloat(SCShareableContent.info(for: filter).pointPixelScale)
-        configuration.width = Int(shareableWindow.frame.width * scale)
-        configuration.height = Int(shareableWindow.frame.height * scale)
-        configuration.showsCursor = false
+        guard let image = renderer.nsImage,
+              let representation = image.cgImage(
+                  forProposedRect: nil,
+                  context: nil,
+                  hints: nil
+              ) else { return nil }
 
-        guard let image = try? await SCScreenshotManager.captureImage(
-            contentFilter: filter,
-            configuration: configuration
-        ) else { return nil }
-        let bitmap = NSBitmapImageRep(cgImage: image)
-        return bitmap.representation(using: .png, properties: [:])
-    }
-
-    private static func visualEffectViews(in view: NSView?) -> [NSVisualEffectView] {
-        guard let view else { return [] }
-        let current = (view as? NSVisualEffectView).map { [$0] } ?? []
-        return current + view.subviews.flatMap(visualEffectViews)
+        return NSBitmapImageRep(cgImage: representation)
+            .representation(using: .png, properties: [:])
     }
 }

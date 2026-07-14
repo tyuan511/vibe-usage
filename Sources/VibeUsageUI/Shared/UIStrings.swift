@@ -15,7 +15,13 @@ enum UIStrings {
     static let events = text(zh: "事件", en: "Events")
     static let input = text(zh: "输入", en: "Input")
     static let output = text(zh: "输出", en: "Output")
-    static let cacheRead = text(zh: "缓存", en: "Cache Read")
+    static var cacheRead: String {
+        cacheReadLabel(isChinesePreferred: VibeUsageStrings.isChinesePreferred)
+    }
+
+    static func cacheReadLabel(isChinesePreferred: Bool) -> String {
+        isChinesePreferred ? "缓存" : "Cache"
+    }
     static let agents = text(zh: "Agents", en: "Agents")
     static let devices = text(zh: "设备", en: "Devices")
     static let models = text(zh: "模型", en: "Models")
