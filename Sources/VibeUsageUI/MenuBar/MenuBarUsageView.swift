@@ -374,7 +374,7 @@ public struct MenuBarUsageView: View {
         HStack(alignment: .center, spacing: 8) {
             MenuSectionTitle(UIStrings.models)
             Spacer()
-            if !snapshot.availableModels.isEmpty {
+            if !isExporting, !snapshot.availableModels.isEmpty {
                 modelFilterMenu
             }
         }

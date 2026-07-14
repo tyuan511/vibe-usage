@@ -1,6 +1,8 @@
 import AppKit
 import SwiftUI
 import Testing
+import VibeUsageAggregation
+import VibeUsageCore
 @testable import VibeUsageUI
 import VibeUsageQuota
 
@@ -120,6 +122,21 @@ import VibeUsageQuota
         #expect(center.redComponent < 0.3)
     }
 
+    @MainActor
+    @Test func exportModeOmitsTheModelFilterControl() throws {
+        let model = ModelUsageSummary(
+            modelFamily: "gpt-5.6-sol",
+            sourceID: .codexCLI,
+            tokens: TokenCounts(input: 100, output: 20),
+            costUSD: 1,
+            eventCount: 1
+        )
+        let exportWithFilterOptions = renderMenuBar(availableModels: [model], displayedModel: model)
+        let exportWithoutFilterOptions = renderMenuBar(availableModels: [], displayedModel: model)
+
+        #expect(exportWithFilterOptions == exportWithoutFilterOptions)
+    }
+
     private func containsPlaceholderColor(in bitmap: NSBitmapImageRep) -> Bool {
         for y in 0..<bitmap.pixelsHigh {
             for x in 0..<bitmap.pixelsWide {
@@ -138,6 +155,50 @@ import VibeUsageQuota
             }
         }
         return false
+    }
+
+    @MainActor
+    private func renderMenuBar(
+        availableModels: [ModelUsageSummary],
+        displayedModel: ModelUsageSummary
+    ) -> Data? {
+        let snapshot = UsageDashboardSnapshot(
+            generatedAt: Date(timeIntervalSince1970: 0),
+            rangeStartDay: "2026-07-14",
+            rangeEndDay: "2026-07-14",
+            totals: UsageTotals(
+                tokens: displayedModel.tokens,
+                costUSD: displayedModel.costUSD,
+                eventCount: 1
+            ),
+            sources: [],
+            daily: [],
+            activity: [],
+            models: [displayedModel],
+            availableModels: availableModels,
+            discoveredSources: []
+        )
+        let view = MenuBarUsageView(
+            snapshot: snapshot,
+            isRefreshing: false,
+            lastError: nil,
+            quota: .empty,
+            selectedDateRange: .constant(.today),
+            selectedModelFilter: .constant([]),
+            hiddenQuotaSourceIDs: [],
+            onRefresh: {},
+            onFilterChange: {},
+            onOpenSettings: {},
+            onQuit: {}
+        )
+        .fixedSize(horizontal: false, vertical: true)
+
+        return MenuBarImageExporter.renderPNGData(
+            colorScheme: .light,
+            scale: 1
+        ) {
+            view
+        }
     }
 }
 
