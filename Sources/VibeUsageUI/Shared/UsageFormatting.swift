@@ -36,6 +36,9 @@ public extension Decimal {
 extension Int {
     var compactString: String {
         let absolute = abs(self)
+        if absolute >= 1_000_000_000 {
+            return String(format: "%.1fB", Double(self) / 1_000_000_000).replacingOccurrences(of: ".0B", with: "B")
+        }
         if absolute >= 1_000_000 {
             return String(format: "%.1fM", Double(self) / 1_000_000).replacingOccurrences(of: ".0M", with: "M")
         }
