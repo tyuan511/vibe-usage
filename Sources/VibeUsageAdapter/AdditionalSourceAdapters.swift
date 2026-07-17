@@ -7,6 +7,7 @@ public enum AdditionalSourceAdapters {
         DroidUsageAdapter(),
         HermesUsageAdapter(),
         PiAgentUsageAdapter(),
+        OhMyPiUsageAdapter(),
         GooseUsageAdapter(),
         OpenClawUsageAdapter(),
         KiloUsageAdapter(),

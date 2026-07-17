@@ -13,6 +13,7 @@ import VibeUsagePricing
     #expect(ids.contains("droid"))
     #expect(ids.contains("hermes-agent"))
     #expect(ids.contains("pi-agent"))
+    #expect(ids.contains("oh-my-pi"))
     #expect(ids.contains("goose"))
     #expect(ids.contains("openclaw"))
     #expect(ids.contains("kilo"))
@@ -477,6 +478,55 @@ import VibeUsagePricing
     #expect(event.model == "[pi] gpt-5")
     #expect(event.tokens == TokenCounts(input: 100, output: 200, cacheCreate: 20, cacheRead: 10))
     #expect(event.costUSD == Decimal(string: "0.03"))
+}
+
+@Test func ohMyPiAdapterParsesAssistantUsageWithReasoningAndSessionHeader() throws {
+    let directory = try TemporaryUsageDirectory()
+    let sessions = directory.url.appendingPathComponent("sessions/-code-vibe-usage", isDirectory: true)
+    try FileManager.default.createDirectory(at: sessions, withIntermediateDirectories: true)
+    let file = sessions.appendingPathComponent("2026-07-16T08-34-09-037Z_019f6a0f-d00d-7000-996f-171d5be6a618.jsonl")
+    try """
+    {"type":"session","version":3,"id":"019f6a0f-d00d-7000-996f-171d5be6a618","timestamp":"2026-07-16T08:34:09.037Z","cwd":"/Users/yuantang/code/vibe-usage"}
+    {"type":"message","id":"56b9d640","timestamp":"2026-07-16T08:34:19.000Z","message":{"role":"assistant","provider":"tangcode","model":"grok-4.5","usage":{"input":100,"output":50,"cacheRead":10,"cacheWrite":20,"totalTokens":180,"reasoningTokens":15,"cost":{"total":0.04}}}}
+    {"type":"message","id":"zero","timestamp":"2026-07-16T08:34:20.000Z","message":{"role":"assistant","model":"grok-4.5","usage":{"input":0,"output":0,"cacheRead":0,"cacheWrite":0,"totalTokens":0,"reasoningTokens":0,"cost":{"total":0}}}}
+    {"type":"title","title":"ignored"}
+
+    """.data(using: .utf8)!.write(to: file)
+
+    let adapter = try #require(AdditionalSourceAdapters.all.first { $0.descriptor.id.rawValue == "oh-my-pi" })
+    let result = try adapter.parseIncrementally(fileAt: file.path, from: nil, pricing: BundledPricingProvider())
+
+    #expect(result.events.count == 1)
+    let event = try #require(result.events.first)
+    #expect(event.sourceID.rawValue == "oh-my-pi")
+    #expect(event.projectOrWorkspace == "-code-vibe-usage")
+    #expect(event.sessionID == "019f6a0f-d00d-7000-996f-171d5be6a618")
+    #expect(event.requestID == "56b9d640")
+    #expect(event.model == "[omp] grok-4.5")
+    #expect(event.tokens == TokenCounts(input: 100, output: 50, cacheCreate: 20, cacheRead: 10, reasoning: 15))
+    #expect(event.costUSD == Decimal(string: "0.04"))
+    #expect(event.dedupKey == "oh-my-pi:msg:56b9d640")
+}
+
+@Test func ohMyPiAdapterResolvesNestedSubagentSessionFromParentDirectory() throws {
+    let directory = try TemporaryUsageDirectory()
+    let parent = directory.url
+        .appendingPathComponent("sessions/-code-vibe-usage", isDirectory: true)
+        .appendingPathComponent("2026-07-16T08-34-09-037Z_019f6a0f-d00d-7000-996f-171d5be6a618", isDirectory: true)
+    try FileManager.default.createDirectory(at: parent, withIntermediateDirectories: true)
+    let file = parent.appendingPathComponent("ScoutAdapters.jsonl")
+    try """
+    {"type":"message","id":"sub-1","timestamp":"2026-07-16T08:35:00.000Z","message":{"role":"assistant","model":"gpt-5","usage":{"input":10,"output":20,"cacheRead":1,"cacheWrite":2,"totalTokens":33,"reasoningTokens":3,"cost":{"total":0.01}}}}
+
+    """.data(using: .utf8)!.write(to: file)
+
+    let adapter = try #require(AdditionalSourceAdapters.all.first { $0.descriptor.id.rawValue == "oh-my-pi" })
+    let result = try adapter.parseIncrementally(fileAt: file.path, from: nil, pricing: BundledPricingProvider())
+
+    let event = try #require(result.events.first)
+    #expect(event.sessionID == "019f6a0f-d00d-7000-996f-171d5be6a618")
+    #expect(event.projectOrWorkspace == "-code-vibe-usage")
+    #expect(event.tokens.reasoning == 3)
 }
 
 @Test func openClawAdapterTracksModelSnapshotForAssistantUsage() throws {
