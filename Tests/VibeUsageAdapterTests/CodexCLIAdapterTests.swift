@@ -2,6 +2,7 @@ import Foundation
 import Testing
 import VibeUsageCore
 import VibeUsagePricing
+import XCTest
 @testable import VibeUsageAdapter
 
 @Test func codexAdapterParsesLastTokenUsage() throws {
@@ -84,7 +85,7 @@ import VibeUsagePricing
     #expect(result.events.first?.sourceFileLine == 8)
 }
 
-@Test func codexAdapterReusesParentAcrossForksWithDifferentReplayCutoffs() throws {
+private func verifyCodexAdapterReusesParentAcrossForksWithDifferentReplayCutoffs() throws {
     let sessions = try TemporaryCodexSessionDirectory()
     let parentID = "019f4969-3449-7b91-8d73-bd0def9f96ac"
     _ = try sessions.write(
@@ -132,8 +133,66 @@ import VibeUsagePricing
         pricing: BundledPricingProvider()
     )
 
-    #expect(early.events.map(\.tokens) == [TokenCounts(input: 50, output: 5)])
-    #expect(late.events.map(\.tokens) == [TokenCounts(input: 60, output: 6)])
+    XCTAssertEqual(early.events.map(\.tokens), [TokenCounts(input: 50, output: 5)])
+    XCTAssertEqual(late.events.map(\.tokens), [TokenCounts(input: 60, output: 6)])
+}
+
+private func verifyCodexAdapterScopesParentIndexToChildHome() throws {
+    let root = FileManager.default.temporaryDirectory
+        .appendingPathComponent("vibe-usage-codex-homes-\(UUID().uuidString)", isDirectory: true)
+    defer { try? FileManager.default.removeItem(at: root) }
+    let firstHome = root.appendingPathComponent("a-home", isDirectory: true)
+    let secondHome = root.appendingPathComponent("z-home", isDirectory: true)
+    let firstSessions = firstHome.appendingPathComponent("sessions/2026/05/13", isDirectory: true)
+    let secondSessions = secondHome.appendingPathComponent("sessions/2026/05/13", isDirectory: true)
+    try FileManager.default.createDirectory(at: firstSessions, withIntermediateDirectories: true)
+    try FileManager.default.createDirectory(at: secondSessions, withIntermediateDirectories: true)
+
+    let parentID = "019f4969-3449-7b91-8d73-bd0def9f96ac"
+    let parentName = "rollout-2026-05-13T09-00-00-\(parentID).jsonl"
+    try Data("""
+    {"timestamp":"2026-05-13T09:00:00.000Z","type":"session_meta","payload":{"id":"\(parentID)"}}
+    {"timestamp":"2026-05-13T09:00:10.000Z","type":"turn_context","payload":{"model":"gpt-5.2-codex"}}
+    {"timestamp":"2026-05-13T09:01:00.000Z","type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":100,"output_tokens":10,"total_tokens":110},"total_token_usage":{"input_tokens":100,"output_tokens":10,"total_tokens":110}}}}
+
+    """.utf8).write(to: firstSessions.appendingPathComponent(parentName))
+    try Data("""
+    {"timestamp":"2026-05-13T09:00:00.000Z","type":"session_meta","payload":{"id":"\(parentID)"}}
+    {"timestamp":"2026-05-13T09:00:10.000Z","type":"turn_context","payload":{"model":"gpt-5.2-codex"}}
+    {"timestamp":"2026-05-13T09:01:00.000Z","type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":999,"output_tokens":99,"total_tokens":1098},"total_token_usage":{"input_tokens":999,"output_tokens":99,"total_tokens":1098}}}}
+
+    """.utf8).write(to: secondSessions.appendingPathComponent(parentName))
+
+    let child = firstSessions.appendingPathComponent(
+        "rollout-2026-05-13T09-02-00-019f498d-dd16-7fd3-acb2-61c3fe90abf7.jsonl"
+    )
+    try Data("""
+    {"timestamp":"2026-05-13T09:02:00.000Z","type":"session_meta","payload":{"id":"019f498d-dd16-7fd3-acb2-61c3fe90abf7","forked_from_id":"\(parentID)"}}
+    {"timestamp":"2026-05-13T09:02:00.001Z","type":"turn_context","payload":{"model":"gpt-5.2-codex"}}
+    {"timestamp":"2026-05-13T09:02:00.002Z","type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":100,"output_tokens":10,"total_tokens":110},"total_token_usage":{"input_tokens":100,"output_tokens":10,"total_tokens":110}}}}
+    {"timestamp":"2026-05-13T09:02:01.000Z","type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":50,"output_tokens":5,"total_tokens":55},"total_token_usage":{"input_tokens":150,"output_tokens":15,"total_tokens":165}}}}
+
+    """.utf8).write(to: child)
+
+    let adapter = CodexCLIAdapter()
+    _ = try adapter.discoverFiles(in: [firstHome, secondHome])
+    let result = try adapter.parseIncrementally(
+        fileAt: child.path,
+        from: nil,
+        pricing: BundledPricingProvider()
+    )
+
+    XCTAssertEqual(result.events.map(\.tokens), [TokenCounts(input: 50, output: 5)])
+}
+
+final class CodexSessionCacheTests: XCTestCase {
+    func testReusesParentAcrossForksWithDifferentReplayCutoffs() throws {
+        try verifyCodexAdapterReusesParentAcrossForksWithDifferentReplayCutoffs()
+    }
+
+    func testScopesParentIndexToChildHome() throws {
+        try verifyCodexAdapterScopesParentIndexToChildHome()
+    }
 }
 
 @Test func codexAdapterSkipsRepeatedCumulativeUsageSnapshot() throws {

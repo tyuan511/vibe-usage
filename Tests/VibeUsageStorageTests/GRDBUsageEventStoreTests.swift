@@ -2,6 +2,7 @@ import Foundation
 import GRDB
 import Testing
 import VibeUsageCore
+import XCTest
 @testable import VibeUsageStorage
 
 private func makeEvent(
@@ -199,7 +200,7 @@ private struct TestPricingProvider: PricingProvider {
     #expect(summaries[0].tokens.output == 50)
 }
 
-@Test func batchApplyIsAtomicAcrossFiles() throws {
+private func verifyBatchApplyIsAtomicAcrossFiles() throws {
     let store = try makeStore()
     let validFile = DiscoveredFile(path: "/tmp/batch-valid.jsonl", sourceID: .claudeCode)
     let missingSource = AgentSourceID(rawValue: "missing-batch-source")
@@ -214,33 +215,31 @@ private struct TestPricingProvider: PricingProvider {
         sourceFilePath: invalidFile.path
     )
 
-    #expect(throws: (any Error).self) {
-        try store.applyParseResults([
-            FileParseApplication(
-                result: ParseResult(events: [validEvent], newCheckpoint: ParseCheckpoint(byteOffset: 10)),
-                file: validFile,
-                fileSize: 10,
-                fileModifiedAt: nil
-            ),
-            FileParseApplication(
-                result: ParseResult(events: [invalidEvent], newCheckpoint: ParseCheckpoint(byteOffset: 20)),
-                file: invalidFile,
-                fileSize: 20,
-                fileModifiedAt: nil
-            )
-        ])
-    }
+    XCTAssertThrowsError(try store.applyParseResults([
+        FileParseApplication(
+            result: ParseResult(events: [validEvent], newCheckpoint: ParseCheckpoint(byteOffset: 10)),
+            file: validFile,
+            fileSize: 10,
+            fileModifiedAt: nil
+        ),
+        FileParseApplication(
+            result: ParseResult(events: [invalidEvent], newCheckpoint: ParseCheckpoint(byteOffset: 20)),
+            file: invalidFile,
+            fileSize: 20,
+            fileModifiedAt: nil
+        )
+    ]))
 
-    #expect(try store.fileMetadata(forFile: validFile.path) == nil)
+    XCTAssertNil(try store.fileMetadata(forFile: validFile.path))
     let summaries = try store.dailySummaries(
         sourceFilter: [],
         startDay: "2023-01-01",
         endDay: "2023-12-31"
     )
-    #expect(summaries.isEmpty)
+    XCTAssertTrue(summaries.isEmpty)
 }
 
-@Test func batchApplyResolvesDuplicatesAndPersistsEveryCheckpoint() throws {
+private func verifyBatchApplyResolvesDuplicatesAndPersistsEveryCheckpoint() throws {
     let store = try makeStore()
     let firstFile = DiscoveredFile(path: "/tmp/batch-first.jsonl", sourceID: .claudeCode)
     let secondFile = DiscoveredFile(path: "/tmp/batch-second.jsonl", sourceID: .claudeCode)
@@ -275,9 +274,19 @@ private struct TestPricingProvider: PricingProvider {
         startDay: "2023-01-01",
         endDay: "2023-12-31"
     )
-    #expect(summaries.map(\.tokens.input) == [999])
-    #expect(try store.fileMetadata(forFile: firstFile.path)?.checkpoint.byteOffset == 10)
-    #expect(try store.fileMetadata(forFile: secondFile.path)?.checkpoint.byteOffset == 20)
+    XCTAssertEqual(summaries.map(\.tokens.input), [999])
+    XCTAssertEqual(try store.fileMetadata(forFile: firstFile.path)?.checkpoint.byteOffset, 10)
+    XCTAssertEqual(try store.fileMetadata(forFile: secondFile.path)?.checkpoint.byteOffset, 20)
+}
+
+final class GRDBBatchUsageEventStoreTests: XCTestCase {
+    func testBatchApplyIsAtomicAcrossFiles() throws {
+        try verifyBatchApplyIsAtomicAcrossFiles()
+    }
+
+    func testBatchApplyResolvesDuplicatesAndPersistsEveryCheckpoint() throws {
+        try verifyBatchApplyResolvesDuplicatesAndPersistsEveryCheckpoint()
+    }
 }
 
 @Test func upsertReplacesExistingRowOnDedupKeyCollisionWhenCandidateWins() throws {

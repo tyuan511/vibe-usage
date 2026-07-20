@@ -54,7 +54,26 @@ func forEachJSONLLine(
     body: (_ line: Data, _ absoluteLineStart: Int64, _ lineIndex: Int) throws -> Void
 ) rethrows {
     var lineIndex = startingLineIndex
-    let data = slice.data
+    try scanJSONLLines(in: slice.data) { line, relativeOffset in
+        try body(line, slice.baseOffset + Int64(relativeOffset), lineIndex)
+        lineIndex += 1
+        return true
+    }
+}
+
+func firstJSONLValue<T>(in data: Data, transform: (Data) throws -> T?) rethrows -> T? {
+    var result: T?
+    try scanJSONLLines(in: data) { line, _ in
+        result = try transform(line)
+        return result == nil
+    }
+    return result
+}
+
+private func scanJSONLLines(
+    in data: Data,
+    body: (Data, Int) throws -> Bool
+) rethrows {
     try data.withUnsafeBytes { rawBuffer in
         guard let baseAddress = rawBuffer.baseAddress else { return }
         var relativeOffset = 0
@@ -70,35 +89,9 @@ func forEachJSONLLine(
                 count: lineLength,
                 deallocator: .none
             )
-            try body(line, slice.baseOffset + Int64(relativeOffset), lineIndex)
-            relativeOffset += lineLength + (newline == nil ? 0 : 1)
-            lineIndex += 1
-        }
-    }
-}
-
-func firstJSONLValue<T>(in data: Data, transform: (Data) throws -> T?) rethrows -> T? {
-    try data.withUnsafeBytes { rawBuffer in
-        guard let baseAddress = rawBuffer.baseAddress, !rawBuffer.isEmpty else { return nil }
-        var relativeOffset = 0
-        while relativeOffset < rawBuffer.count {
-            let lineStart = baseAddress.advanced(by: relativeOffset)
-            let remaining = rawBuffer.count - relativeOffset
-            let newline = memchr(lineStart, Int32(0x0A), remaining)
-            let lineLength = newline.map {
-                lineStart.distance(to: UnsafeRawPointer($0))
-            } ?? remaining
-            let line = Data(
-                bytesNoCopy: UnsafeMutableRawPointer(mutating: lineStart),
-                count: lineLength,
-                deallocator: .none
-            )
-            if let value = try transform(line) {
-                return value
-            }
+            guard try body(line, relativeOffset) else { return }
             relativeOffset += lineLength + (newline == nil ? 0 : 1)
         }
-        return nil
     }
 }
 

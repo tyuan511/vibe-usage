@@ -232,7 +232,7 @@ final class UsageIngestorConcurrencyTests: XCTestCase {
     }
 }
 
-@Test func ingestorPersistsParsedFilesAsOneBatch() async throws {
+private func verifyIngestorPersistsParsedFilesAsOneBatch() async throws {
     let root = FileManager.default.temporaryDirectory
         .appendingPathComponent("vibe-usage-batch-\(UUID().uuidString)", isDirectory: true)
     try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
@@ -249,9 +249,15 @@ final class UsageIngestorConcurrencyTests: XCTestCase {
 
     let summary = try await ingestor.scanOnce()
 
-    #expect(summary.scannedFiles == 3)
-    #expect(store.batchCallCount == 1)
-    #expect(store.individualCallCount == 0)
+    XCTAssertEqual(summary.scannedFiles, 3)
+    XCTAssertEqual(store.batchCallCount, 1)
+    XCTAssertEqual(store.individualCallCount, 0)
+}
+
+final class UsageIngestorBatchTests: XCTestCase {
+    func testPersistsParsedFilesAsOneBatch() async throws {
+        try await verifyIngestorPersistsParsedFilesAsOneBatch()
+    }
 }
 
 @Test func watchPathsNormalizeSQLiteSidecars() {

@@ -15,28 +15,6 @@ public struct FileParseMetadata: Sendable, Equatable {
     }
 }
 
-/// One parsed file and the filesystem metadata captured for the same scan.
-/// Stores can persist several applications in one transaction while retaining
-/// the existing per-file checkpoint semantics.
-public struct FileParseApplication: Sendable {
-    public let result: ParseResult
-    public let file: DiscoveredFile
-    public let fileSize: Int64
-    public let fileModifiedAt: Date?
-
-    public init(
-        result: ParseResult,
-        file: DiscoveredFile,
-        fileSize: Int64,
-        fileModifiedAt: Date?
-    ) {
-        self.result = result
-        self.file = file
-        self.fileSize = fileSize
-        self.fileModifiedAt = fileModifiedAt
-    }
-}
-
 /// Storage-facing contract. Implemented by ``VibeUsageStorage`` (GRDB-backed);
 /// kept as a protocol in Core so watching/aggregation/tests can depend on the
 /// abstraction rather than a concrete database.

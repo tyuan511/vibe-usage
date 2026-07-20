@@ -267,26 +267,18 @@ public struct CodexCLIAdapter: UsageSourceAdapter {
     }
 
     private func parentSessionPath(parentID: String, childPath: String) -> String? {
-        if let indexed = sessionCache.path(for: parentID) {
+        if let indexed = sessionCache.path(for: parentID, childPath: childPath) {
             return indexed
         }
 
-        var container = URL(fileURLWithPath: childPath).deletingLastPathComponent()
-        while container.path != "/",
-              container.lastPathComponent != "sessions",
-              container.lastPathComponent != "archived_sessions" {
-            container.deleteLastPathComponent()
-        }
-        guard container.path != "/" else { return nil }
-
-        let home = container.deletingLastPathComponent()
+        guard let home = codexHomeDirectory(containing: childPath) else { return nil }
         let expectedSuffix = "-\(parentID).jsonl"
         for directoryName in ["sessions", "archived_sessions"] {
             let directory = home.appendingPathComponent(directoryName, isDirectory: true)
             guard directory.isDirectory else { continue }
             if let match = collectJSONLFiles(under: directory)
                 .first(where: { $0.lastPathComponent.hasSuffix(expectedSuffix) }) {
-                sessionCache.record(path: match.path, for: parentID)
+                sessionCache.record(path: match.path, for: parentID, childPath: childPath)
                 return match.path
             }
         }
@@ -466,6 +458,11 @@ private struct ForkReplayMatch {
 }
 
 private final class CodexSessionCache: @unchecked Sendable {
+    private struct SessionKey: Hashable {
+        let homePath: String
+        let sessionID: String
+    }
+
     private struct CachedSnapshots {
         let fileSize: Int64
         let modifiedAt: Date?
@@ -473,28 +470,39 @@ private final class CodexSessionCache: @unchecked Sendable {
     }
 
     private let lock = NSLock()
-    private var pathsBySessionID: [String: String] = [:]
+    private var pathsBySessionKey: [SessionKey: String] = [:]
     private var snapshotsByPath: [String: CachedSnapshots] = [:]
 
     func replaceIndex(with files: [URL]) {
-        var index: [String: String] = [:]
-        index.reserveCapacity(files.count)
+        var scopedIndex: [SessionKey: String] = [:]
+        scopedIndex.reserveCapacity(files.count)
         for file in files {
-            guard let sessionID = Self.sessionID(from: file) else { continue }
-            index[sessionID] = file.path
+            guard let sessionID = Self.sessionID(from: file),
+                  let home = codexHomeDirectory(containing: file.path) else { continue }
+            scopedIndex[SessionKey(homePath: home.standardizedFileURL.path, sessionID: sessionID)] = file.path
         }
         lock.withLock {
-            pathsBySessionID = index
+            pathsBySessionKey = scopedIndex
         }
     }
 
-    func path(for sessionID: String) -> String? {
-        lock.withLock { pathsBySessionID[sessionID.lowercased()] }
+    func path(for sessionID: String, childPath: String) -> String? {
+        guard let home = codexHomeDirectory(containing: childPath) else { return nil }
+        let key = SessionKey(
+            homePath: home.standardizedFileURL.path,
+            sessionID: sessionID.lowercased()
+        )
+        return lock.withLock { pathsBySessionKey[key] }
     }
 
-    func record(path: String, for sessionID: String) {
+    func record(path: String, for sessionID: String, childPath: String) {
+        guard let home = codexHomeDirectory(containing: childPath) else { return }
+        let key = SessionKey(
+            homePath: home.standardizedFileURL.path,
+            sessionID: sessionID.lowercased()
+        )
         lock.withLock {
-            pathsBySessionID[sessionID.lowercased()] = path
+            pathsBySessionKey[key] = path
         }
     }
 
@@ -560,6 +568,16 @@ private func collectDedupedJSONLFiles(under directory: URL, scope: URL, seenKeys
         }
     }
     return files
+}
+
+private func codexHomeDirectory(containing path: String) -> URL? {
+    var container = URL(fileURLWithPath: path).deletingLastPathComponent()
+    while container.path != "/",
+          container.lastPathComponent != "sessions",
+          container.lastPathComponent != "archived_sessions" {
+        container.deleteLastPathComponent()
+    }
+    return container.path == "/" ? nil : container.deletingLastPathComponent()
 }
 
 private func collectJSONLFiles(under directory: URL) -> [URL] {
