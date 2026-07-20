@@ -86,7 +86,7 @@ public struct CodexCLIAdapter: UsageSourceAdapter {
 
         forEachJSONLLine(in: slice, startingLineIndex: lineIndex) { line, _, currentLineIndex in
             lineIndex = currentLineIndex + 1
-            guard let object = try? YYJSONValue(data: line) else {
+            guard let object = try? parseJSONValue(line) else {
                 return
             }
 
@@ -415,7 +415,7 @@ private func firstJSONObject(in data: Data) -> YYJSONValue? {
     var offset = 0
     while offset < data.count {
         let newline = data[offset...].firstIndex(of: 0x0A) ?? data.endIndex
-        if let object = try? YYJSONValue(data: data[offset..<newline]) {
+        if let object = try? parseJSONValue(data[offset..<newline]) {
             return object
         }
         offset = newline < data.endIndex ? newline + 1 : data.endIndex
@@ -429,7 +429,7 @@ private func jsonObjectLines(in data: Data) -> [(number: Int, object: YYJSONValu
     var lineNumber = 1
     while offset < data.count {
         let newline = data[offset...].firstIndex(of: 0x0A) ?? data.count
-        if let object = try? YYJSONValue(data: data[offset..<newline]) {
+        if let object = try? parseJSONValue(data[offset..<newline]) {
             objects.append((number: lineNumber, object: object))
         }
         offset = newline < data.count ? newline + 1 : data.count
@@ -473,14 +473,7 @@ private func codexString(_ value: YYJSONValue?) -> String? {
 }
 
 private func codexInt(_ value: YYJSONValue?) -> Int? {
-    guard let value else { return nil }
-    if let number = value.number {
-        guard number.isFinite,
-              number >= Double(Int.min),
-              number <= Double(Int.max) else { return nil }
-        return Int(number)
-    }
-    return value.string.flatMap(Int.init)
+    int(value)
 }
 
 private extension Substring {

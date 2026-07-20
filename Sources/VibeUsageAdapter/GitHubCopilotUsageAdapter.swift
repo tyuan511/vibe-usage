@@ -64,7 +64,7 @@ private func jsonLineObjects(data: Data) -> [YYJSONValue] {
         let newline = data[lineStart...].firstIndex(of: 0x0A) ?? data.count
         offset = newline < data.count ? newline + 1 : data.count
         guard newline > lineStart,
-              let object = try? YYJSONValue(data: data[lineStart..<newline]) else { continue }
+              let object = try? parseJSONValue(data[lineStart..<newline]) else { continue }
         objects.append(object)
     }
     return objects

@@ -15,6 +15,10 @@ struct JSONLByteSlice: Sendable {
     var isEmpty: Bool { data.isEmpty }
 }
 
+func parseJSONValue(_ data: Data) throws -> YYJSONValue {
+    try YYJSONValue(data: data, options: .numberAsRaw)
+}
+
 /// Loads JSONL bytes efficiently:
 /// - full reads use `mappedIfSafe` when possible to avoid copying large files into heap
 /// - incremental reads only load the tail after `checkpoint.byteOffset`
@@ -72,7 +76,7 @@ func parseJSONLines(path: String, checkpoint: ParseCheckpoint?, transform: (YYJS
     forEachJSONLLine(in: slice, startingLineIndex: lineIndex) { line, _, currentLineIndex in
         lineIndex = currentLineIndex + 1
         guard !line.isEmpty,
-              let object = try? YYJSONValue(data: line),
+              let object = try? parseJSONValue(line),
               let event = transform(object, currentLineIndex + 1) else { return }
         events.append(event)
     }
@@ -215,7 +219,7 @@ func dedup(_ urls: [URL]) -> [URL] {
 func jsonValueFile(_ path: String) throws -> YYJSONValue? {
     let data = try Data(contentsOf: URL(fileURLWithPath: path))
     guard !data.isEmpty else { return nil }
-    return try YYJSONValue(data: data)
+    return try parseJSONValue(data)
 }
 
 func tableExists(_ name: String, in db: Database) throws -> Bool {
@@ -231,7 +235,7 @@ func columnExists(_ column: String, in table: String, database: Database) throws
 
 func jsonValue(from text: String) -> YYJSONValue? {
     guard let data = text.data(using: .utf8) else { return nil }
-    return try? YYJSONValue(data: data)
+    return try? parseJSONValue(data)
 }
 
 func dictionary(from row: Row) -> [String: Any] {
@@ -330,21 +334,18 @@ func string(_ value: YYJSONValue?) -> String? {
     if let string = value.string {
         return string.trimmingCharacters(in: .whitespacesAndNewlines)
     }
-    guard let number = value.number, number.isFinite else { return nil }
-    if number.rounded(.towardZero) == number,
-       number >= Double(Int64.min),
-       number <= Double(Int64.max) {
-        return String(Int64(number))
-    }
-    return String(number)
+    return value.number == nil ? nil : value.description
 }
 
 func int(_ value: YYJSONValue?) -> Int? {
     guard let value else { return nil }
+    if let exact = Int(value.description) {
+        return exact
+    }
     if let number = value.number {
         guard number.isFinite,
-              number >= Double(Int.min),
-              number <= Double(Int.max) else { return nil }
+              number >= -9_223_372_036_854_775_808.0,
+              number < 9_223_372_036_854_775_808.0 else { return nil }
         return Int(number)
     }
     return value.string.flatMap { Int($0.trimmingCharacters(in: .whitespacesAndNewlines)) }

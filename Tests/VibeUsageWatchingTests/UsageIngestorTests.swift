@@ -4,6 +4,7 @@ import Testing
 import VibeUsageCore
 import VibeUsagePricing
 import VibeUsageStorage
+import XCTest
 @testable import VibeUsageWatching
 
 @Test func ingestionSummaryStoresCounts() {
@@ -206,27 +207,29 @@ import VibeUsageStorage
     #expect(summary.insertedEvents == 1)
 }
 
-@Test func ingestorParsesFilesWithoutSaturatingMultipleCores() async throws {
-    let root = FileManager.default.temporaryDirectory
-        .appendingPathComponent("vibe-usage-concurrency-\(UUID().uuidString)", isDirectory: true)
-    try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-    defer { try? FileManager.default.removeItem(at: root) }
+final class UsageIngestorConcurrencyTests: XCTestCase {
+    func testIngestorParsesFilesWithoutSaturatingMultipleCores() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("vibe-usage-concurrency-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
 
-    for index in 0..<4 {
-        try Data([UInt8(index)]).write(to: root.appendingPathComponent("events-\(index).jsonl"))
+        for index in 0..<4 {
+            try Data([UInt8(index)]).write(to: root.appendingPathComponent("events-\(index).jsonl"))
+        }
+
+        let tracker = ParseConcurrencyTracker()
+        let registry = AdapterRegistry()
+        registry.register(ConcurrencyTrackingAdapter(root: root, tracker: tracker))
+        let store = GRDBUsageEventStore(database: try UsageDatabase())
+        let ingestor = UsageIngestor(registry: registry, store: store, pricing: BundledPricingProvider())
+
+        let summary = try await ingestor.scanOnce()
+
+        XCTAssertEqual(summary.scannedFiles, 4)
+        XCTAssertEqual(tracker.maximumConcurrentParses, 1)
+        XCTAssertLessThanOrEqual(tracker.maximumQoSClass, QOS_CLASS_UTILITY.rawValue)
     }
-
-    let tracker = ParseConcurrencyTracker()
-    let registry = AdapterRegistry()
-    registry.register(ConcurrencyTrackingAdapter(root: root, tracker: tracker))
-    let store = GRDBUsageEventStore(database: try UsageDatabase())
-    let ingestor = UsageIngestor(registry: registry, store: store, pricing: BundledPricingProvider())
-
-    let summary = try await ingestor.scanOnce()
-
-    #expect(summary.scannedFiles == 4)
-    #expect(tracker.maximumConcurrentParses == 1)
-    #expect(tracker.maximumQoSClass <= QOS_CLASS_UTILITY.rawValue)
 }
 
 @Test func watchPathsNormalizeSQLiteSidecars() {
