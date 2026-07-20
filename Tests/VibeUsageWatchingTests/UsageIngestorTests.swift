@@ -232,6 +232,28 @@ final class UsageIngestorConcurrencyTests: XCTestCase {
     }
 }
 
+@Test func ingestorPersistsParsedFilesAsOneBatch() async throws {
+    let root = FileManager.default.temporaryDirectory
+        .appendingPathComponent("vibe-usage-batch-\(UUID().uuidString)", isDirectory: true)
+    try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: root) }
+
+    for index in 0..<3 {
+        try Data([UInt8(index)]).write(to: root.appendingPathComponent("events-\(index).jsonl"))
+    }
+
+    let registry = AdapterRegistry()
+    registry.register(ConcurrencyTrackingAdapter(root: root, tracker: ParseConcurrencyTracker()))
+    let store = BatchRecordingStore(base: GRDBUsageEventStore(database: try UsageDatabase()))
+    let ingestor = UsageIngestor(registry: registry, store: store, pricing: BundledPricingProvider())
+
+    let summary = try await ingestor.scanOnce()
+
+    #expect(summary.scannedFiles == 3)
+    #expect(store.batchCallCount == 1)
+    #expect(store.individualCallCount == 0)
+}
+
 @Test func watchPathsNormalizeSQLiteSidecars() {
     let db = "/tmp/opencode.db"
     #expect(UsageWatchPaths.canonicalWatchPath(db + "-wal") == db)
@@ -269,6 +291,65 @@ private final class ParseConcurrencyTracker: @unchecked Sendable {
         lock.lock()
         activeParses -= 1
         lock.unlock()
+    }
+}
+
+private final class BatchRecordingStore: UsageEventStore, @unchecked Sendable {
+    private let base: GRDBUsageEventStore
+    private let lock = NSLock()
+    private var recordedBatchCalls = 0
+    private var recordedIndividualCalls = 0
+
+    init(base: GRDBUsageEventStore) {
+        self.base = base
+    }
+
+    var batchCallCount: Int {
+        lock.withLock { recordedBatchCalls }
+    }
+
+    var individualCallCount: Int {
+        lock.withLock { recordedIndividualCalls }
+    }
+
+    func ensureSourceRegistered(_ descriptor: AgentSourceDescriptor) throws {
+        try base.ensureSourceRegistered(descriptor)
+    }
+
+    func fileMetadata(forFile path: String) throws -> FileParseMetadata? {
+        try base.fileMetadata(forFile: path)
+    }
+
+    func fileMetadata(forFiles paths: [String]) throws -> [String: FileParseMetadata] {
+        try base.fileMetadata(forFiles: paths)
+    }
+
+    func applyParseResult(
+        _ result: ParseResult,
+        file: DiscoveredFile,
+        fileSize: Int64,
+        fileModifiedAt: Date?
+    ) throws {
+        lock.withLock { recordedIndividualCalls += 1 }
+        try base.applyParseResult(
+            result,
+            file: file,
+            fileSize: fileSize,
+            fileModifiedAt: fileModifiedAt
+        )
+    }
+
+    func applyParseResults(_ applications: [FileParseApplication]) throws {
+        lock.withLock { recordedBatchCalls += 1 }
+        try base.applyParseResults(applications)
+    }
+
+    func repriceEstimatedEvents(using pricing: any PricingProvider) throws -> Int {
+        try base.repriceEstimatedEvents(using: pricing)
+    }
+
+    func resetFile(_ path: String) throws {
+        try base.resetFile(path)
     }
 }
 

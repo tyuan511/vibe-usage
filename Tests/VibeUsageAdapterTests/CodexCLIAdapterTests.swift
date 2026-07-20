@@ -84,6 +84,58 @@ import VibeUsagePricing
     #expect(result.events.first?.sourceFileLine == 8)
 }
 
+@Test func codexAdapterReusesParentAcrossForksWithDifferentReplayCutoffs() throws {
+    let sessions = try TemporaryCodexSessionDirectory()
+    let parentID = "019f4969-3449-7b91-8d73-bd0def9f96ac"
+    _ = try sessions.write(
+        fileName: "rollout-2026-05-13T09-00-00-\(parentID).jsonl",
+        contents: """
+        {"timestamp":"2026-05-13T09:00:00.000Z","type":"session_meta","payload":{"id":"\(parentID)"}}
+        {"timestamp":"2026-05-13T09:00:10.000Z","type":"turn_context","payload":{"model":"gpt-5.2-codex"}}
+        {"timestamp":"2026-05-13T09:01:00.000Z","type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":100,"output_tokens":10,"total_tokens":110},"total_token_usage":{"input_tokens":100,"output_tokens":10,"total_tokens":110}}}}
+        {"timestamp":"2026-05-13T09:02:00.000Z","type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":100,"output_tokens":10,"total_tokens":110},"total_token_usage":{"input_tokens":200,"output_tokens":20,"total_tokens":220}}}}
+
+        """
+    )
+    let earlyChild = try sessions.write(
+        fileName: "rollout-2026-05-13T09-01-30-019f498d-dd16-7fd3-acb2-61c3fe90abf7.jsonl",
+        contents: """
+
+        {"timestamp":"2026-05-13T09:01:30.000Z","type":"session_meta","payload":{"id":"019f498d-dd16-7fd3-acb2-61c3fe90abf7","forked_from_id":"\(parentID)"}}
+        {"timestamp":"2026-05-13T09:01:30.001Z","type":"turn_context","payload":{"model":"gpt-5.2-codex"}}
+        {"timestamp":"2026-05-13T09:01:30.002Z","type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":100,"output_tokens":10,"total_tokens":110},"total_token_usage":{"input_tokens":100,"output_tokens":10,"total_tokens":110}}}}
+        {"timestamp":"2026-05-13T09:01:40.000Z","type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":50,"output_tokens":5,"total_tokens":55},"total_token_usage":{"input_tokens":150,"output_tokens":15,"total_tokens":165}}}}
+
+        """
+    )
+    let lateChild = try sessions.write(
+        fileName: "rollout-2026-05-13T09-02-30-019f498d-dd16-7fd3-acb2-61c3fe90abf8.jsonl",
+        contents: """
+        {"timestamp":"2026-05-13T09:02:30.000Z","type":"session_meta","payload":{"id":"019f498d-dd16-7fd3-acb2-61c3fe90abf8","forked_from_id":"\(parentID)"}}
+        {"timestamp":"2026-05-13T09:02:30.001Z","type":"turn_context","payload":{"model":"gpt-5.2-codex"}}
+        {"timestamp":"2026-05-13T09:02:30.002Z","type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":100,"output_tokens":10,"total_tokens":110},"total_token_usage":{"input_tokens":100,"output_tokens":10,"total_tokens":110}}}}
+        {"timestamp":"2026-05-13T09:02:30.003Z","type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":100,"output_tokens":10,"total_tokens":110},"total_token_usage":{"input_tokens":200,"output_tokens":20,"total_tokens":220}}}}
+        {"timestamp":"2026-05-13T09:02:40.000Z","type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":60,"output_tokens":6,"total_tokens":66},"total_token_usage":{"input_tokens":260,"output_tokens":26,"total_tokens":286}}}}
+
+        """
+    )
+
+    let adapter = CodexCLIAdapter()
+    let early = try adapter.parseIncrementally(
+        fileAt: earlyChild.path,
+        from: nil,
+        pricing: BundledPricingProvider()
+    )
+    let late = try adapter.parseIncrementally(
+        fileAt: lateChild.path,
+        from: nil,
+        pricing: BundledPricingProvider()
+    )
+
+    #expect(early.events.map(\.tokens) == [TokenCounts(input: 50, output: 5)])
+    #expect(late.events.map(\.tokens) == [TokenCounts(input: 60, output: 6)])
+}
+
 @Test func codexAdapterSkipsRepeatedCumulativeUsageSnapshot() throws {
     let file = try TemporaryCodexUsageFile(contents: """
     {"timestamp":"2026-05-13T09:00:00.000Z","type":"turn_context","payload":{"model":"gpt-5.2-codex"}}

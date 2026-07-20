@@ -87,13 +87,15 @@ public final class UsageIngestor: Sendable {
             }
 
             let parsed = try await parse(jobs: jobs, adapter: adapter)
-            for item in parsed {
-                try store.applyParseResult(
-                    item.result,
+            try store.applyParseResults(parsed.map { item in
+                FileParseApplication(
+                    result: item.result,
                     file: item.job.file,
                     fileSize: item.job.fileSize,
                     fileModifiedAt: item.job.modifiedAt
                 )
+            })
+            for item in parsed {
                 scannedFiles += 1
                 insertedEvents += item.result.events.count
             }

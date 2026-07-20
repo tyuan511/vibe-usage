@@ -12,8 +12,11 @@ public struct CodexCLIAdapter: UsageSourceAdapter {
         tintColorHex: "#2D7D72",
         sortOrder: 1
     )
+    private let sessionCache: CodexSessionCache
 
-    public init() {}
+    public init() {
+        sessionCache = CodexSessionCache()
+    }
 
     public func discoverRootDirectories() -> [URL] {
         let homes: [URL]
@@ -49,9 +52,9 @@ public struct CodexCLIAdapter: UsageSourceAdapter {
             }
         }
 
-        return discovered
-            .sorted { $0.path < $1.path }
-            .map { DiscoveredFile(path: $0.path, sourceID: descriptor.id) }
+        let sorted = discovered.sorted { $0.path < $1.path }
+        sessionCache.replaceIndex(with: sorted)
+        return sorted.map { DiscoveredFile(path: $0.path, sourceID: descriptor.id) }
     }
 
     public func parseIncrementally(
@@ -65,7 +68,7 @@ public struct CodexCLIAdapter: UsageSourceAdapter {
         }
 
         var state = checkpoint?.adapterState.flatMap { try? YYJSONDecoder().decode(CodexParseState.self, from: $0) } ?? CodexParseState()
-        let replayMatch: ForkReplayMatch
+        var replayMatch: ForkReplayMatch
         if state.forkReplayProcessed == true {
             replayMatch = .complete
         } else {
@@ -76,8 +79,11 @@ public struct CodexCLIAdapter: UsageSourceAdapter {
             } else {
                 prefixData = try loadJSONLBytes(path: path, from: nil).data
             }
-            replayMatch = Self.forkReplayMatch(in: prefixData, fileAt: path)
-            state.forkReplayProcessed = replayMatch.isComplete
+            replayMatch = forkReplayMatch(
+                in: prefixData,
+                fileAt: path,
+                streamChildDuringMainParse: slice.baseOffset == 0
+            )
         }
         var lineIndex = checkpoint?.lineIndex ?? 0
         var events: [UsageEvent] = []
@@ -96,8 +102,12 @@ public struct CodexCLIAdapter: UsageSourceAdapter {
                 return
             }
 
-            guard let parsed = Self.tokenUsageEvent(from: object, state: &state) else { return }
-            guard !replayMatch.lineIndexes.contains(currentLineIndex + 1) else { return }
+            let parsed = Self.tokenUsageEvent(from: object, state: &state)
+            let shouldSkipReplay = replayMatch.shouldSkip(
+                snapshot: replayMatch.requiresSnapshots ? Self.usageSnapshot(from: object) : nil,
+                lineNumber: currentLineIndex + 1
+            )
+            guard let parsed, !shouldSkipReplay else { return }
             guard let timestamp = Date.vibeUsageParse(parsed.timestamp) else { return }
             guard let rawModel = parsed.model.nonEmpty else { return }
 
@@ -132,6 +142,7 @@ public struct CodexCLIAdapter: UsageSourceAdapter {
             ))
         }
 
+        state.forkReplayProcessed = replayMatch.isComplete
         let stateData = try? JSONEncoder().encode(state)
         return ParseResult(
             events: events,
@@ -177,7 +188,11 @@ public struct CodexCLIAdapter: UsageSourceAdapter {
         return ParsedCodexEvent(timestamp: timestamp, model: resolved.model, usage: rawUsage, isFallbackModel: resolved.isFallback)
     }
 
-    private static func forkReplayMatch(in childData: Data, fileAt childPath: String) -> ForkReplayMatch {
+    private func forkReplayMatch(
+        in childData: Data,
+        fileAt childPath: String,
+        streamChildDuringMainParse: Bool
+    ) -> ForkReplayMatch {
         guard let first = firstJSONObject(in: childData),
               codexString(first["type"]) == "session_meta",
               let payload = first["payload"],
@@ -187,40 +202,54 @@ public struct CodexCLIAdapter: UsageSourceAdapter {
             return .complete
         }
         guard let parentPath = parentSessionPath(parentID: parentID, childPath: childPath),
-              let parentData = try? loadJSONLBytes(path: parentPath, from: nil).data else {
+              let datedSnapshots = parentSnapshots(at: parentPath) else {
             return .pending
         }
 
-        let childObjects = jsonObjectLines(in: childData)
-        let parentSnapshots = jsonObjectLines(in: parentData).compactMap { line -> CodexUsageSnapshot? in
-            let object = line.object
-            guard let timestamp = codexString(object["timestamp"]),
-                  let date = Date.vibeUsageParse(timestamp),
-                  date <= forkDate else {
-                return nil
-            }
-            return usageSnapshot(from: object)
-        }
+        let parentSnapshots = datedSnapshots
+            .filter { $0.date <= forkDate }
+            .map(\.snapshot)
         guard !parentSnapshots.isEmpty else { return .complete }
+        if streamChildDuringMainParse {
+            return .streaming(parentSnapshots: parentSnapshots)
+        }
 
+        let childObjects = jsonObjectLines(in: childData)
         var replayLines = Set<Int>()
         var parentIndex = 0
         for line in childObjects {
             let object = line.object
-            guard let snapshot = usageSnapshot(from: object) else { continue }
+            guard let snapshot = Self.usageSnapshot(from: object) else { continue }
             guard parentIndex < parentSnapshots.count else {
-                return ForkReplayMatch(lineIndexes: replayLines, isComplete: true)
+                return ForkReplayMatch(indexedLineNumbers: replayLines, isComplete: true)
             }
             guard snapshot == parentSnapshots[parentIndex] else {
-                return ForkReplayMatch(lineIndexes: replayLines, isComplete: true)
+                return ForkReplayMatch(indexedLineNumbers: replayLines, isComplete: true)
             }
             replayLines.insert(line.number)
             parentIndex += 1
         }
         return ForkReplayMatch(
-            lineIndexes: replayLines,
+            indexedLineNumbers: replayLines,
             isComplete: parentIndex == parentSnapshots.count
         )
+    }
+
+    private func parentSnapshots(at path: String) -> [DatedCodexUsageSnapshot]? {
+        sessionCache.snapshots(for: path) {
+            guard let parentData = try? loadJSONLBytes(path: path, from: nil).data else {
+                return nil
+            }
+            return jsonObjectLines(in: parentData).compactMap { line -> DatedCodexUsageSnapshot? in
+                let object = line.object
+                guard let timestamp = codexString(object["timestamp"]),
+                      let date = Date.vibeUsageParse(timestamp),
+                      let snapshot = Self.usageSnapshot(from: object) else {
+                    return nil
+                }
+                return DatedCodexUsageSnapshot(date: date, snapshot: snapshot)
+            }
+        }
     }
 
     private static func usageSnapshot(from object: YYJSONValue) -> CodexUsageSnapshot? {
@@ -237,7 +266,11 @@ public struct CodexCLIAdapter: UsageSourceAdapter {
         return snapshot.total == nil && snapshot.last == nil ? nil : snapshot
     }
 
-    private static func parentSessionPath(parentID: String, childPath: String) -> String? {
+    private func parentSessionPath(parentID: String, childPath: String) -> String? {
+        if let indexed = sessionCache.path(for: parentID) {
+            return indexed
+        }
+
         var container = URL(fileURLWithPath: childPath).deletingLastPathComponent()
         while container.path != "/",
               container.lastPathComponent != "sessions",
@@ -253,6 +286,7 @@ public struct CodexCLIAdapter: UsageSourceAdapter {
             guard directory.isDirectory else { continue }
             if let match = collectJSONLFiles(under: directory)
                 .first(where: { $0.lastPathComponent.hasSuffix(expectedSuffix) }) {
+                sessionCache.record(path: match.path, for: parentID)
                 return match.path
             }
         }
@@ -359,12 +393,142 @@ private struct CodexUsageSnapshot: Equatable {
     let last: CodexRawUsage?
 }
 
-private struct ForkReplayMatch {
-    let lineIndexes: Set<Int>
-    let isComplete: Bool
+private struct DatedCodexUsageSnapshot {
+    let date: Date
+    let snapshot: CodexUsageSnapshot
+}
 
-    static let complete = ForkReplayMatch(lineIndexes: [], isComplete: true)
-    static let pending = ForkReplayMatch(lineIndexes: [], isComplete: false)
+private struct ForkReplayMatch {
+    private enum Mode {
+        case complete
+        case pending
+        case indexed(lineNumbers: Set<Int>, isComplete: Bool)
+        case streaming(parentSnapshots: [CodexUsageSnapshot], parentIndex: Int)
+    }
+
+    private var mode: Mode
+
+    init(indexedLineNumbers: Set<Int>, isComplete: Bool) {
+        mode = .indexed(lineNumbers: indexedLineNumbers, isComplete: isComplete)
+    }
+
+    private init(mode: Mode) {
+        self.mode = mode
+    }
+
+    static func streaming(parentSnapshots: [CodexUsageSnapshot]) -> ForkReplayMatch {
+        ForkReplayMatch(mode: .streaming(parentSnapshots: parentSnapshots, parentIndex: 0))
+    }
+
+    mutating func shouldSkip(snapshot: CodexUsageSnapshot?, lineNumber: Int) -> Bool {
+        switch mode {
+        case .complete, .pending:
+            return false
+        case let .indexed(lineNumbers, _):
+            return lineNumbers.contains(lineNumber)
+        case let .streaming(parentSnapshots, parentIndex):
+            guard let snapshot else { return false }
+            guard parentIndex < parentSnapshots.count else {
+                mode = .complete
+                return false
+            }
+            guard snapshot == parentSnapshots[parentIndex] else {
+                mode = .complete
+                return false
+            }
+            mode = .streaming(parentSnapshots: parentSnapshots, parentIndex: parentIndex + 1)
+            return true
+        }
+    }
+
+    var isComplete: Bool {
+        switch mode {
+        case .complete:
+            return true
+        case .pending:
+            return false
+        case let .indexed(_, isComplete):
+            return isComplete
+        case let .streaming(parentSnapshots, parentIndex):
+            return parentIndex == parentSnapshots.count
+        }
+    }
+
+    var requiresSnapshots: Bool {
+        if case .streaming = mode {
+            return true
+        }
+        return false
+    }
+
+    static let complete = ForkReplayMatch(mode: .complete)
+    static let pending = ForkReplayMatch(mode: .pending)
+}
+
+private final class CodexSessionCache: @unchecked Sendable {
+    private struct CachedSnapshots {
+        let fileSize: Int64
+        let modifiedAt: Date?
+        let values: [DatedCodexUsageSnapshot]
+    }
+
+    private let lock = NSLock()
+    private var pathsBySessionID: [String: String] = [:]
+    private var snapshotsByPath: [String: CachedSnapshots] = [:]
+
+    func replaceIndex(with files: [URL]) {
+        var index: [String: String] = [:]
+        index.reserveCapacity(files.count)
+        for file in files {
+            guard let sessionID = Self.sessionID(from: file) else { continue }
+            index[sessionID] = file.path
+        }
+        lock.withLock {
+            pathsBySessionID = index
+        }
+    }
+
+    func path(for sessionID: String) -> String? {
+        lock.withLock { pathsBySessionID[sessionID.lowercased()] }
+    }
+
+    func record(path: String, for sessionID: String) {
+        lock.withLock {
+            pathsBySessionID[sessionID.lowercased()] = path
+        }
+    }
+
+    func snapshots(
+        for path: String,
+        load: () -> [DatedCodexUsageSnapshot]?
+    ) -> [DatedCodexUsageSnapshot]? {
+        guard let attributes = try? FileManager.default.attributesOfItem(atPath: path) else {
+            return nil
+        }
+        let fileSize = (attributes[.size] as? NSNumber)?.int64Value ?? 0
+        let modifiedAt = attributes[.modificationDate] as? Date
+        if let cached = lock.withLock({ snapshotsByPath[path] }),
+           cached.fileSize == fileSize,
+           cached.modifiedAt == modifiedAt {
+            return cached.values
+        }
+        guard let values = load() else { return nil }
+        lock.withLock {
+            snapshotsByPath[path] = CachedSnapshots(
+                fileSize: fileSize,
+                modifiedAt: modifiedAt,
+                values: values
+            )
+        }
+        return values
+    }
+
+    private static func sessionID(from file: URL) -> String? {
+        let stem = file.deletingPathExtension().lastPathComponent
+        guard stem.count >= 36 else { return nil }
+        let candidate = String(stem.suffix(36))
+        return UUID(uuidString: candidate) == nil ? nil : candidate.lowercased()
+    }
 }
 
 private struct CodexRawUsage: Codable, Equatable {
@@ -412,28 +576,16 @@ private func collectJSONLFiles(under directory: URL) -> [URL] {
 }
 
 private func firstJSONObject(in data: Data) -> YYJSONValue? {
-    var offset = 0
-    while offset < data.count {
-        let newline = data[offset...].firstIndex(of: 0x0A) ?? data.endIndex
-        if let object = try? parseJSONValue(data[offset..<newline]) {
-            return object
-        }
-        offset = newline < data.endIndex ? newline + 1 : data.endIndex
-    }
-    return nil
+    firstJSONLValue(in: data) { try? parseJSONValue($0) }
 }
 
 private func jsonObjectLines(in data: Data) -> [(number: Int, object: YYJSONValue)] {
     var objects: [(number: Int, object: YYJSONValue)] = []
-    var offset = 0
-    var lineNumber = 1
-    while offset < data.count {
-        let newline = data[offset...].firstIndex(of: 0x0A) ?? data.count
-        if let object = try? parseJSONValue(data[offset..<newline]) {
-            objects.append((number: lineNumber, object: object))
+    let slice = JSONLByteSlice(baseOffset: 0, data: data, endOffset: Int64(data.count))
+    forEachJSONLLine(in: slice, startingLineIndex: 0) { line, _, lineIndex in
+        if let object = try? parseJSONValue(line) {
+            objects.append((number: lineIndex + 1, object: object))
         }
-        offset = newline < data.count ? newline + 1 : data.count
-        lineNumber += 1
     }
     return objects
 }

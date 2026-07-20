@@ -58,13 +58,9 @@ private func parseCopilotFile(path: String, descriptor: AgentSourceDescriptor, p
 
 private func jsonLineObjects(data: Data) -> [YYJSONValue] {
     var objects: [YYJSONValue] = []
-    var offset = 0
-    while offset < data.count {
-        let lineStart = offset
-        let newline = data[lineStart...].firstIndex(of: 0x0A) ?? data.count
-        offset = newline < data.count ? newline + 1 : data.count
-        guard newline > lineStart,
-              let object = try? parseJSONValue(data[lineStart..<newline]) else { continue }
+    let slice = JSONLByteSlice(baseOffset: 0, data: data, endOffset: Int64(data.count))
+    forEachJSONLLine(in: slice, startingLineIndex: 0) { line, _, _ in
+        guard !line.isEmpty, let object = try? parseJSONValue(line) else { return }
         objects.append(object)
     }
     return objects

@@ -199,6 +199,87 @@ private struct TestPricingProvider: PricingProvider {
     #expect(summaries[0].tokens.output == 50)
 }
 
+@Test func batchApplyIsAtomicAcrossFiles() throws {
+    let store = try makeStore()
+    let validFile = DiscoveredFile(path: "/tmp/batch-valid.jsonl", sourceID: .claudeCode)
+    let missingSource = AgentSourceID(rawValue: "missing-batch-source")
+    let invalidFile = DiscoveredFile(path: "/tmp/batch-invalid.jsonl", sourceID: missingSource)
+    let validEvent = makeEvent(
+        dedupKey: "batch-valid",
+        sourceFilePath: validFile.path
+    )
+    let invalidEvent = makeEvent(
+        sourceID: missingSource,
+        dedupKey: "batch-invalid",
+        sourceFilePath: invalidFile.path
+    )
+
+    #expect(throws: (any Error).self) {
+        try store.applyParseResults([
+            FileParseApplication(
+                result: ParseResult(events: [validEvent], newCheckpoint: ParseCheckpoint(byteOffset: 10)),
+                file: validFile,
+                fileSize: 10,
+                fileModifiedAt: nil
+            ),
+            FileParseApplication(
+                result: ParseResult(events: [invalidEvent], newCheckpoint: ParseCheckpoint(byteOffset: 20)),
+                file: invalidFile,
+                fileSize: 20,
+                fileModifiedAt: nil
+            )
+        ])
+    }
+
+    #expect(try store.fileMetadata(forFile: validFile.path) == nil)
+    let summaries = try store.dailySummaries(
+        sourceFilter: [],
+        startDay: "2023-01-01",
+        endDay: "2023-12-31"
+    )
+    #expect(summaries.isEmpty)
+}
+
+@Test func batchApplyResolvesDuplicatesAndPersistsEveryCheckpoint() throws {
+    let store = try makeStore()
+    let firstFile = DiscoveredFile(path: "/tmp/batch-first.jsonl", sourceID: .claudeCode)
+    let secondFile = DiscoveredFile(path: "/tmp/batch-second.jsonl", sourceID: .claudeCode)
+    let first = makeEvent(
+        tokens: TokenCounts(input: 10),
+        dedupKey: "batch-shared",
+        sourceFilePath: firstFile.path
+    )
+    let winner = makeEvent(
+        tokens: TokenCounts(input: 999),
+        dedupKey: "batch-shared",
+        sourceFilePath: secondFile.path
+    )
+
+    try store.applyParseResults([
+        FileParseApplication(
+            result: ParseResult(events: [first], newCheckpoint: ParseCheckpoint(byteOffset: 10)),
+            file: firstFile,
+            fileSize: 10,
+            fileModifiedAt: nil
+        ),
+        FileParseApplication(
+            result: ParseResult(events: [winner], newCheckpoint: ParseCheckpoint(byteOffset: 20)),
+            file: secondFile,
+            fileSize: 20,
+            fileModifiedAt: nil
+        )
+    ])
+
+    let summaries = try store.dailySummaries(
+        sourceFilter: [],
+        startDay: "2023-01-01",
+        endDay: "2023-12-31"
+    )
+    #expect(summaries.map(\.tokens.input) == [999])
+    #expect(try store.fileMetadata(forFile: firstFile.path)?.checkpoint.byteOffset == 10)
+    #expect(try store.fileMetadata(forFile: secondFile.path)?.checkpoint.byteOffset == 20)
+}
+
 @Test func upsertReplacesExistingRowOnDedupKeyCollisionWhenCandidateWins() throws {
     let store = try makeStore()
     let file = DiscoveredFile(path: "/tmp/usage.jsonl", sourceID: .claudeCode)

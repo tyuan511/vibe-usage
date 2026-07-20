@@ -15,6 +15,28 @@ public struct FileParseMetadata: Sendable, Equatable {
     }
 }
 
+/// One parsed file and the filesystem metadata captured for the same scan.
+/// Stores can persist several applications in one transaction while retaining
+/// the existing per-file checkpoint semantics.
+public struct FileParseApplication: Sendable {
+    public let result: ParseResult
+    public let file: DiscoveredFile
+    public let fileSize: Int64
+    public let fileModifiedAt: Date?
+
+    public init(
+        result: ParseResult,
+        file: DiscoveredFile,
+        fileSize: Int64,
+        fileModifiedAt: Date?
+    ) {
+        self.result = result
+        self.file = file
+        self.fileSize = fileSize
+        self.fileModifiedAt = fileModifiedAt
+    }
+}
+
 /// Storage-facing contract. Implemented by ``VibeUsageStorage`` (GRDB-backed);
 /// kept as a protocol in Core so watching/aggregation/tests can depend on the
 /// abstraction rather than a concrete database.
@@ -40,6 +62,10 @@ public protocol UsageEventStore: Sendable {
         fileModifiedAt: Date?
     ) throws
 
+    /// Atomically persists multiple parsed files when the store supports a
+    /// native batch. The default preserves compatibility with simple stores.
+    func applyParseResults(_ applications: [FileParseApplication]) throws
+
     /// Recalculates previously estimated events whose model now has a pricing
     /// entry. Previously unpriced events become confirmed; existing nonzero
     /// estimates remain marked as estimated. Returns the number of changed rows.
@@ -61,5 +87,16 @@ public extension UsageEventStore {
             }
         }
         return result
+    }
+
+    func applyParseResults(_ applications: [FileParseApplication]) throws {
+        for application in applications {
+            try applyParseResult(
+                application.result,
+                file: application.file,
+                fileSize: application.fileSize,
+                fileModifiedAt: application.fileModifiedAt
+            )
+        }
     }
 }

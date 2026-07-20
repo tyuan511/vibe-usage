@@ -53,21 +53,59 @@ public final class GRDBUsageEventStore: UsageEventStore, Sendable {
         fileSize: Int64,
         fileModifiedAt: Date?
     ) throws {
+        try applyParseResults([
+            FileParseApplication(
+                result: result,
+                file: file,
+                fileSize: fileSize,
+                fileModifiedAt: fileModifiedAt
+            )
+        ])
+    }
+
+    public func applyParseResults(_ applications: [FileParseApplication]) throws {
+        guard !applications.isEmpty else { return }
         try dbQueue.write { db in
-            for event in result.events {
-                let changedDates = try Self.upsert(event: event, db: db)
-                for date in changedDates {
-                    try Self.markSyncDayDirty(for: date, db: db)
+            let incomingEvents = Self.coalescedEvents(in: applications)
+            let existingRecords = try Self.existingRecords(for: incomingEvents, db: db)
+            var dirtyDayRevisions: [String: Int] = [:]
+
+            for event in incomingEvents {
+                let identity = UsageEventIdentity(event)
+                if let existing = existingRecords[identity] {
+                    guard DedupPolicy.shouldReplace(
+                        existing: existing.toUsageEvent(),
+                        candidate: event
+                    ) else { continue }
+                    var replacement = UsageEventRecord(event: event)
+                    replacement.id = existing.id
+                    try replacement.update(db)
+                    dirtyDayRevisions[Self.utcDayString(existing.timestampUtc), default: 0] += 1
+                    dirtyDayRevisions[Self.utcDayString(event.timestamp), default: 0] += 1
+                } else {
+                    try UsageEventRecord(event: event).insert(db)
+                    dirtyDayRevisions[Self.utcDayString(event.timestamp), default: 0] += 1
                 }
             }
-            try Self.upsertFileState(
-                filePath: file.path,
-                sourceID: file.sourceID,
-                checkpoint: result.newCheckpoint,
-                fileSize: fileSize,
-                fileModifiedAt: fileModifiedAt,
-                db: db
-            )
+
+            for (day, revisionIncrement) in dirtyDayRevisions {
+                try Self.markSyncDayDirty(
+                    dayUTC: day,
+                    revisionIncrement: revisionIncrement,
+                    db: db
+                )
+            }
+
+            for application in applications {
+                try Self.upsertFileState(
+                    filePath: application.file.path,
+                    sourceID: application.file.sourceID,
+                    checkpoint: application.result.newCheckpoint,
+                    fileSize: application.fileSize,
+                    fileModifiedAt: application.fileModifiedAt,
+                    db: db
+                )
+            }
         }
     }
 
@@ -116,32 +154,63 @@ public final class GRDBUsageEventStore: UsageEventStore, Sendable {
 
     // MARK: - Upsert internals
 
-    private static func upsert(event: UsageEvent, db: GRDB.Database) throws -> [Date] {
-        let existing = try UsageEventRecord
-            .filter(Column("source_id") == event.sourceID.rawValue)
-            .filter(Column("dedup_key") == event.dedupKey)
-            .fetchOne(db)
+    private static func coalescedEvents(in applications: [FileParseApplication]) -> [UsageEvent] {
+        var order: [UsageEventIdentity] = []
+        var eventsByIdentity: [UsageEventIdentity: UsageEvent] = [:]
+        for application in applications {
+            for event in application.result.events {
+                let identity = UsageEventIdentity(event)
+                if let existing = eventsByIdentity[identity] {
+                    if DedupPolicy.shouldReplace(existing: existing, candidate: event) {
+                        eventsByIdentity[identity] = event
+                    }
+                } else {
+                    order.append(identity)
+                    eventsByIdentity[identity] = event
+                }
+            }
+        }
+        return order.compactMap { eventsByIdentity[$0] }
+    }
 
-        guard let existing else {
-            try UsageEventRecord(event: event).insert(db)
-            return [event.timestamp]
+    private static func existingRecords(
+        for events: [UsageEvent],
+        db: GRDB.Database
+    ) throws -> [UsageEventIdentity: UsageEventRecord] {
+        let keysBySource = Dictionary(grouping: events, by: { $0.sourceID.rawValue })
+            .mapValues { Set($0.map(\.dedupKey)) }
+        var recordsByIdentity: [UsageEventIdentity: UsageEventRecord] = [:]
+        for (sourceID, keys) in keysBySource {
+            let keys = Array(keys)
+            for start in stride(from: 0, to: keys.count, by: 400) {
+                let chunk = Array(keys[start..<min(start + 400, keys.count)])
+                let records = try UsageEventRecord
+                    .filter(Column("source_id") == sourceID)
+                    .filter(chunk.contains(Column("dedup_key")))
+                    .fetchAll(db)
+                for record in records {
+                    recordsByIdentity[UsageEventIdentity(record)] = record
+                }
+            }
         }
-        guard DedupPolicy.shouldReplace(existing: existing.toUsageEvent(), candidate: event) else {
-            return []
-        }
-        var replacement = UsageEventRecord(event: event)
-        replacement.id = existing.id
-        try replacement.update(db)
-        return [existing.timestampUtc, event.timestamp]
+        return recordsByIdentity
     }
 
     private static func markSyncDayDirty(for date: Date, db: GRDB.Database) throws {
+        try markSyncDayDirty(dayUTC: utcDayString(date), revisionIncrement: 1, db: db)
+    }
+
+    private static func markSyncDayDirty(
+        dayUTC: String,
+        revisionIncrement: Int,
+        db: GRDB.Database
+    ) throws {
         try db.execute(
             sql: """
-                INSERT INTO sync_dirty_day(day_utc, revision) VALUES (?, 1)
-                ON CONFLICT(day_utc) DO UPDATE SET revision = revision + 1
+                INSERT INTO sync_dirty_day(day_utc, revision) VALUES (?, ?)
+                ON CONFLICT(day_utc) DO UPDATE SET revision = revision + excluded.revision
                 """,
-            arguments: [utcDayString(date)]
+            arguments: [dayUTC, revisionIncrement]
         )
     }
 
@@ -523,6 +592,21 @@ public final class GRDBUsageEventStore: UsageEventStore, Sendable {
         """
     }
 
+}
+
+private struct UsageEventIdentity: Hashable {
+    let sourceID: String
+    let dedupKey: String
+
+    init(_ event: UsageEvent) {
+        sourceID = event.sourceID.rawValue
+        dedupKey = event.dedupKey
+    }
+
+    init(_ record: UsageEventRecord) {
+        sourceID = record.sourceId
+        dedupKey = record.dedupKey
+    }
 }
 
 public struct DailySourceUsage: Sendable, Equatable {
