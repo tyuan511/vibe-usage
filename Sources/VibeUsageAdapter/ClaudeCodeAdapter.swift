@@ -1,6 +1,7 @@
 import Foundation
 import VibeUsageCore
 import VibeUsagePricing
+import YYJSON
 
 public struct ClaudeCodeAdapter: UsageSourceAdapter {
     public let descriptor = AgentSourceDescriptor(
@@ -68,7 +69,7 @@ public struct ClaudeCodeAdapter: UsageSourceAdapter {
         forEachJSONLLine(in: slice, startingLineIndex: lineIndex) { line, _, currentLineIndex in
             lineIndex = currentLineIndex + 1
             guard line.contains(usageMarker) else { return }
-            guard let entry = try? JSONDecoder.vibeUsage.decode(ClaudeUsageEntry.self, from: line) else { return }
+            guard let entry = try? YYJSONDecoder.vibeUsage.decode(ClaudeUsageEntry.self, from: line) else { return }
             guard entry.isValid, let timestamp = Date.vibeUsageParse(entry.timestamp) else { return }
             guard let rawModel = entry.message.model?.nonEmpty, rawModel != "<synthetic>" else { return }
 
@@ -283,8 +284,8 @@ private extension Data {
     }
 }
 
-private extension JSONDecoder {
-    static var vibeUsage: JSONDecoder {
-        JSONDecoder()
+private extension YYJSONDecoder {
+    static var vibeUsage: YYJSONDecoder {
+        YYJSONDecoder()
     }
 }

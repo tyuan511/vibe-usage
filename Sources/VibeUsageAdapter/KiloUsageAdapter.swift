@@ -2,6 +2,7 @@ import Foundation
 import GRDB
 import VibeUsageCore
 import VibeUsagePricing
+import YYJSON
 
 public struct KiloUsageAdapter: UsageSourceAdapter {
     public let descriptor = makeDescriptor("kilo", "Kilo", "Kilo", "k.circle", "#8A6D3B", 18)
@@ -47,7 +48,7 @@ private func parseKiloDatabase(
             let rowid = Int64.fromDatabaseValue(row["rowid"]) ?? 0
             maxRowID = max(maxRowID, rowid)
             guard let data = String.fromDatabaseValue(row["data"]),
-                  let object = jsonObject(from: data) else { continue }
+                  let object = jsonValue(from: data) else { continue }
             let rowID = String.fromDatabaseValue(row["id"]) ?? "\(path):message"
             let rowSession = String.fromDatabaseValue(row["session_id"]) ?? sessionIDFromPath(path)
             if let event = kiloEvent(from: object, rowID: rowID, rowSessionID: rowSession, path: path, descriptor: descriptor, pricing: pricing) {
@@ -62,12 +63,12 @@ private func parseKiloDatabase(
     )
 }
 
-private func kiloEvent(from object: [String: Any], rowID: String, rowSessionID: String, path: String, descriptor: AgentSourceDescriptor, pricing: PricingProvider) -> UsageEvent? {
+private func kiloEvent(from object: YYJSONValue, rowID: String, rowSessionID: String, path: String, descriptor: AgentSourceDescriptor, pricing: PricingProvider) -> UsageEvent? {
     guard string(object["role"]) == "assistant",
-          let tokens = object["tokens"] as? [String: Any],
+          let tokens = object["tokens"],
           let model = firstString(in: object, keys: ["modelID", "modelId", "model"]),
-          let timestamp = (object["time"] as? [String: Any]).flatMap({ kiloTimestampDate(int($0["created"])) }) else { return nil }
-    let cache = tokens["cache"] as? [String: Any]
+          let timestamp = object["time"].flatMap({ kiloTimestampDate(int($0["created"])) }) else { return nil }
+    let cache = tokens["cache"]
     let counts = applyTotalFallback(TokenCounts(
         input: int(tokens["input"]) ?? 0,
         output: int(tokens["output"]) ?? 0,

@@ -1,6 +1,7 @@
 import Foundation
 import VibeUsageCore
 import VibeUsagePricing
+import YYJSON
 
 public struct CodexCLIAdapter: UsageSourceAdapter {
     public let descriptor = AgentSourceDescriptor(
@@ -63,7 +64,7 @@ public struct CodexCLIAdapter: UsageSourceAdapter {
             return ParseResult(events: [], newCheckpoint: .start)
         }
 
-        var state = checkpoint?.adapterState.flatMap { try? JSONDecoder().decode(CodexParseState.self, from: $0) } ?? CodexParseState()
+        var state = checkpoint?.adapterState.flatMap { try? YYJSONDecoder().decode(CodexParseState.self, from: $0) } ?? CodexParseState()
         let replayMatch: ForkReplayMatch
         if state.forkReplayProcessed == true {
             replayMatch = .complete
@@ -85,7 +86,7 @@ public struct CodexCLIAdapter: UsageSourceAdapter {
 
         forEachJSONLLine(in: slice, startingLineIndex: lineIndex) { line, _, currentLineIndex in
             lineIndex = currentLineIndex + 1
-            guard let object = try? JSONSerialization.jsonObject(with: line) as? [String: Any] else {
+            guard let object = try? YYJSONValue(data: line) else {
                 return
             }
 
@@ -138,14 +139,14 @@ public struct CodexCLIAdapter: UsageSourceAdapter {
         )
     }
 
-    private static func turnContextModel(from object: [String: Any]) -> String? {
-        guard codexString(object["type"]) == "turn_context", let payload = object["payload"] as? [String: Any] else { return nil }
+    private static func turnContextModel(from object: YYJSONValue) -> String? {
+        guard codexString(object["type"]) == "turn_context", let payload = object["payload"] else { return nil }
         return model(from: payload)
     }
 
-    private static func tokenUsageEvent(from object: [String: Any], state: inout CodexParseState) -> ParsedCodexEvent? {
+    private static func tokenUsageEvent(from object: YYJSONValue, state: inout CodexParseState) -> ParsedCodexEvent? {
         if codexString(object["type"]) == "event_msg",
-           let payload = object["payload"] as? [String: Any],
+           let payload = object["payload"],
            codexString(payload["type"]) == "token_count" {
             return sessionTokenUsageEvent(from: object, payload: payload, state: &state)
         }
@@ -153,17 +154,17 @@ public struct CodexCLIAdapter: UsageSourceAdapter {
     }
 
     private static func sessionTokenUsageEvent(
-        from object: [String: Any],
-        payload: [String: Any],
+        from object: YYJSONValue,
+        payload: YYJSONValue,
         state: inout CodexParseState
     ) -> ParsedCodexEvent? {
         guard let timestamp = codexString(object["timestamp"]) else { return nil }
-        let info = payload["info"] as? [String: Any] ?? [:]
-        let total = parseUsage(from: info["total_token_usage"])
+        let info = payload["info"]
+        let total = parseUsage(from: info?["total_token_usage"])
         if let total, total == state.previousTotals {
             return nil
         }
-        let rawUsage = parseUsage(from: info["last_token_usage"]) ?? total.map { totalUsage in
+        let rawUsage = parseUsage(from: info?["last_token_usage"]) ?? total.map { totalUsage in
             totalUsage.subtracting(state.previousTotals)
         }
         if let total {
@@ -171,16 +172,15 @@ public struct CodexCLIAdapter: UsageSourceAdapter {
         }
         guard let rawUsage else { return nil }
 
-        let parsedModel = model(from: payload) ?? model(from: info)
+        let parsedModel = model(from: payload) ?? info.flatMap(model)
         let resolved = resolveModel(parsedModel: parsedModel, timestamp: timestamp, state: &state)
         return ParsedCodexEvent(timestamp: timestamp, model: resolved.model, usage: rawUsage, isFallbackModel: resolved.isFallback)
     }
 
     private static func forkReplayMatch(in childData: Data, fileAt childPath: String) -> ForkReplayMatch {
-        let childObjects = jsonObjectLines(in: childData)
-        guard let first = childObjects.first?.object,
+        guard let first = firstJSONObject(in: childData),
               codexString(first["type"]) == "session_meta",
-              let payload = first["payload"] as? [String: Any],
+              let payload = first["payload"],
               let parentID = codexString(payload["forked_from_id"])?.nonEmpty,
               let forkTimestamp = codexString(first["timestamp"]),
               let forkDate = Date.vibeUsageParse(forkTimestamp) else {
@@ -191,6 +191,7 @@ public struct CodexCLIAdapter: UsageSourceAdapter {
             return .pending
         }
 
+        let childObjects = jsonObjectLines(in: childData)
         let parentSnapshots = jsonObjectLines(in: parentData).compactMap { line -> CodexUsageSnapshot? in
             let object = line.object
             guard let timestamp = codexString(object["timestamp"]),
@@ -222,11 +223,11 @@ public struct CodexCLIAdapter: UsageSourceAdapter {
         )
     }
 
-    private static func usageSnapshot(from object: [String: Any]) -> CodexUsageSnapshot? {
+    private static func usageSnapshot(from object: YYJSONValue) -> CodexUsageSnapshot? {
         guard codexString(object["type"]) == "event_msg",
-              let payload = object["payload"] as? [String: Any],
+              let payload = object["payload"],
               codexString(payload["type"]) == "token_count",
-              let info = payload["info"] as? [String: Any] else {
+              let info = payload["info"] else {
             return nil
         }
         let snapshot = CodexUsageSnapshot(
@@ -258,24 +259,24 @@ public struct CodexCLIAdapter: UsageSourceAdapter {
         return nil
     }
 
-    private static func headlessTokenUsageEvent(from object: [String: Any], state: inout CodexParseState) -> ParsedCodexEvent? {
+    private static func headlessTokenUsageEvent(from object: YYJSONValue, state: inout CodexParseState) -> ParsedCodexEvent? {
         let rawUsage = parseUsage(from: object["usage"])
-            ?? dictionary(object["data"]).flatMap { parseUsage(from: $0["usage"]) }
-            ?? dictionary(object["result"]).flatMap { parseUsage(from: $0["usage"]) }
-            ?? dictionary(object["response"]).flatMap { parseUsage(from: $0["usage"]) }
+            ?? object["data"].flatMap { parseUsage(from: $0["usage"]) }
+            ?? object["result"].flatMap { parseUsage(from: $0["usage"]) }
+            ?? object["response"].flatMap { parseUsage(from: $0["usage"]) }
         guard let rawUsage else { return nil }
 
         let timestamp = codexString(object["timestamp"])
             ?? codexString(object["created_at"])
             ?? codexString(object["createdAt"])
-            ?? dictionary(object["data"]).flatMap(timestampString)
-            ?? dictionary(object["result"]).flatMap(timestampString)
-            ?? dictionary(object["response"]).flatMap(timestampString)
+            ?? object["data"].flatMap(timestampString)
+            ?? object["result"].flatMap(timestampString)
+            ?? object["response"].flatMap(timestampString)
             ?? ISO8601DateFormatter.vibeUsageFractional.string(from: Date())
         let parsedModel = model(from: object)
-            ?? dictionary(object["data"]).flatMap(model)
-            ?? dictionary(object["result"]).flatMap(model)
-            ?? dictionary(object["response"]).flatMap(model)
+            ?? object["data"].flatMap(model)
+            ?? object["result"].flatMap(model)
+            ?? object["response"].flatMap(model)
         let resolved = resolveModel(parsedModel: parsedModel, timestamp: timestamp, state: &state)
         return ParsedCodexEvent(timestamp: timestamp, model: resolved.model, usage: rawUsage, isFallbackModel: resolved.isFallback)
     }
@@ -410,13 +411,25 @@ private func collectJSONLFiles(under directory: URL) -> [URL] {
     }
 }
 
-private func jsonObjectLines(in data: Data) -> [(number: Int, object: [String: Any])] {
-    var objects: [(number: Int, object: [String: Any])] = []
+private func firstJSONObject(in data: Data) -> YYJSONValue? {
+    var offset = 0
+    while offset < data.count {
+        let newline = data[offset...].firstIndex(of: 0x0A) ?? data.endIndex
+        if let object = try? YYJSONValue(data: data[offset..<newline]) {
+            return object
+        }
+        offset = newline < data.endIndex ? newline + 1 : data.endIndex
+    }
+    return nil
+}
+
+private func jsonObjectLines(in data: Data) -> [(number: Int, object: YYJSONValue)] {
+    var objects: [(number: Int, object: YYJSONValue)] = []
     var offset = 0
     var lineNumber = 1
     while offset < data.count {
         let newline = data[offset...].firstIndex(of: 0x0A) ?? data.count
-        if let object = try? JSONSerialization.jsonObject(with: data[offset..<newline]) as? [String: Any] {
+        if let object = try? YYJSONValue(data: data[offset..<newline]) {
             objects.append((number: lineNumber, object: object))
         }
         offset = newline < data.count ? newline + 1 : data.count
@@ -425,13 +438,13 @@ private func jsonObjectLines(in data: Data) -> [(number: Int, object: [String: A
     return objects
 }
 
-private func parseUsage(from value: Any?) -> CodexRawUsage? {
-    guard let dictionary = value as? [String: Any] else { return nil }
-    let input = codexInt(dictionary["input_tokens"]) ?? codexInt(dictionary["prompt_tokens"]) ?? codexInt(dictionary["input"]) ?? 0
-    let output = codexInt(dictionary["output_tokens"]) ?? codexInt(dictionary["completion_tokens"]) ?? codexInt(dictionary["output"]) ?? 0
-    let reasoning = codexInt(dictionary["reasoning_output_tokens"]) ?? codexInt(dictionary["reasoning_tokens"]) ?? 0
-    let cached = codexInt(dictionary["cached_input_tokens"]) ?? codexInt(dictionary["cache_read_input_tokens"]) ?? codexInt(dictionary["cached_tokens"]) ?? 0
-    let total = codexInt(dictionary["total_tokens"]).flatMap { $0 > 0 || input + output + reasoning == 0 ? $0 : nil } ?? (input + output + reasoning)
+private func parseUsage(from value: YYJSONValue?) -> CodexRawUsage? {
+    guard let value, value.object != nil else { return nil }
+    let input = codexInt(value["input_tokens"]) ?? codexInt(value["prompt_tokens"]) ?? codexInt(value["input"]) ?? 0
+    let output = codexInt(value["output_tokens"]) ?? codexInt(value["completion_tokens"]) ?? codexInt(value["output"]) ?? 0
+    let reasoning = codexInt(value["reasoning_output_tokens"]) ?? codexInt(value["reasoning_tokens"]) ?? 0
+    let cached = codexInt(value["cached_input_tokens"]) ?? codexInt(value["cache_read_input_tokens"]) ?? codexInt(value["cached_tokens"]) ?? 0
+    let total = codexInt(value["total_tokens"]).flatMap { $0 > 0 || input + output + reasoning == 0 ? $0 : nil } ?? (input + output + reasoning)
     return CodexRawUsage(
         inputTokens: input,
         cachedInputTokens: cached,
@@ -441,42 +454,33 @@ private func parseUsage(from value: Any?) -> CodexRawUsage? {
     )
 }
 
-private func model(from dictionary: [String: Any]) -> String? {
-    codexString(dictionary["model"])?.nonEmpty
-        ?? codexString(dictionary["model_name"])?.nonEmpty
-        ?? (dictionary["metadata"] as? [String: Any]).flatMap { codexString($0["model"])?.nonEmpty }
+private func model(from value: YYJSONValue) -> String? {
+    codexString(value["model"])?.nonEmpty
+        ?? codexString(value["model_name"])?.nonEmpty
+        ?? value["metadata"].flatMap { codexString($0["model"])?.nonEmpty }
 }
 
-private func timestampString(from dictionary: [String: Any]) -> String? {
-    codexString(dictionary["timestamp"]) ?? codexString(dictionary["created_at"]) ?? codexString(dictionary["createdAt"])
+private func timestampString(from value: YYJSONValue) -> String? {
+    codexString(value["timestamp"]) ?? codexString(value["created_at"]) ?? codexString(value["createdAt"])
 }
 
-private func dictionary(_ value: Any?) -> [String: Any]? {
-    value as? [String: Any]
-}
-
-private func codexString(_ value: Any?) -> String? {
-    switch value {
-    case let value as String:
+private func codexString(_ value: YYJSONValue?) -> String? {
+    guard let value else { return nil }
+    if let value = value.string {
         return value.trimmingCharacters(in: .whitespacesAndNewlines)
-    case let value as NSNumber:
-        return Date(timeIntervalSince1970: value.doubleValue / 1000).vibeUsageISOString
-    default:
-        return nil
     }
+    return value.number.map { Date(timeIntervalSince1970: $0 / 1000).vibeUsageISOString }
 }
 
-private func codexInt(_ value: Any?) -> Int? {
-    switch value {
-    case let value as Int:
-        return value
-    case let value as NSNumber:
-        return value.intValue
-    case let value as String:
-        return Int(value)
-    default:
-        return nil
+private func codexInt(_ value: YYJSONValue?) -> Int? {
+    guard let value else { return nil }
+    if let number = value.number {
+        guard number.isFinite,
+              number >= Double(Int.min),
+              number <= Double(Int.max) else { return nil }
+        return Int(number)
     }
+    return value.string.flatMap(Int.init)
 }
 
 private extension Substring {

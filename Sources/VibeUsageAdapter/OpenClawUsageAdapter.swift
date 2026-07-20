@@ -2,6 +2,7 @@ import Foundation
 import GRDB
 import VibeUsageCore
 import VibeUsagePricing
+import YYJSON
 
 public struct OpenClawUsageAdapter: UsageSourceAdapter {
     public let descriptor = makeDescriptor("openclaw", "OpenClaw", "Claw", "curlybraces", "#94633E", 17)
@@ -30,21 +31,21 @@ public struct OpenClawUsageAdapter: UsageSourceAdapter {
     }
 }
 
-private func openClawModel(from object: [String: Any]) -> (model: String, provider: String?)? {
+private func openClawModel(from object: YYJSONValue) -> (model: String, provider: String?)? {
     let type = string(object["type"])
     let custom = string(object["customType"])
     guard type == "model_change" || (type == "custom" && custom == "model-snapshot") else { return nil }
-    if let data = object["data"] as? [String: Any] {
+    if let data = object["data"] {
         return (firstString(in: data, keys: ["modelId", "model", "modelID"]) ?? "unknown", firstString(in: data, keys: ["provider"]))
     }
     return (firstString(in: object, keys: ["modelId", "model", "modelID"]) ?? "unknown", firstString(in: object, keys: ["provider"]))
 }
 
-private func openClawEvent(from object: [String: Any], model: String?, provider _: String?, path: String, line: Int, descriptor: AgentSourceDescriptor, pricing: PricingProvider) -> UsageEvent? {
-    let message = object["message"] as? [String: Any]
+private func openClawEvent(from object: YYJSONValue, model: String?, provider _: String?, path: String, line: Int, descriptor: AgentSourceDescriptor, pricing: PricingProvider) -> UsageEvent? {
+    let message = object["message"]
     guard string(object["type"]) == "message",
           string(message?["role"]) == "assistant",
-          let usage = message?["usage"] as? [String: Any] else { return nil }
+          let usage = message?["usage"] else { return nil }
     let counts = applyTotalFallback(TokenCounts(
         input: int(usage["input"]) ?? 0,
         output: int(usage["output"]) ?? 0,
@@ -52,9 +53,9 @@ private func openClawEvent(from object: [String: Any], model: String?, provider 
         cacheRead: int(usage["cacheRead"]) ?? 0
     ), total: int(usage["totalTokens"]) ?? 0)
     guard counts.total > 0 else { return nil }
-    let timestamp = firstDate(in: message ?? [:], keys: ["timestamp"]) ?? firstDate(in: object, keys: ["timestamp"]) ?? fileModifiedDate(path) ?? Date.distantPast
-    let resolvedModel = firstString(in: message ?? [:], keys: ["modelId", "model"]) ?? model ?? "unknown"
-    let cost = (usage["cost"] as? [String: Any]).flatMap { decimal($0["total"]) }
+    let timestamp = message.flatMap { firstDate(in: $0, keys: ["timestamp"]) } ?? firstDate(in: object, keys: ["timestamp"]) ?? fileModifiedDate(path) ?? Date.distantPast
+    let resolvedModel = message.flatMap { firstString(in: $0, keys: ["modelId", "model"]) } ?? model ?? "unknown"
+    let cost = usage["cost"].flatMap { decimal($0["total"]) }
     return makeEvent(sourceID: descriptor.id, timestamp: timestamp, sessionID: openClawSessionID(from: path), project: "OpenClaw", requestID: nil, model: "[openclaw] \(resolvedModel)", tokens: counts, displayCost: cost, pricing: pricing, dedupKey: "\(descriptor.id.rawValue):\(path):\(line)", path: path, line: line)
 }
 

@@ -2,6 +2,7 @@ import Foundation
 import GRDB
 import VibeUsageCore
 import VibeUsagePricing
+import YYJSON
 
 public struct GitHubCopilotUsageAdapter: UsageSourceAdapter {
     public let descriptor = makeDescriptor("github-copilot-cli", "GitHub Copilot CLI", "Copilot", "person.crop.circle.badge.checkmark", "#207A3C", 21)
@@ -55,25 +56,25 @@ private func parseCopilotFile(path: String, descriptor: AgentSourceDescriptor, p
     return ParseResult(events: emitted, newCheckpoint: ParseCheckpoint(byteOffset: Int64(data.count), lineIndex: objects.count))
 }
 
-private func jsonLineObjects(data: Data) -> [[String: Any]] {
-    var objects: [[String: Any]] = []
+private func jsonLineObjects(data: Data) -> [YYJSONValue] {
+    var objects: [YYJSONValue] = []
     var offset = 0
     while offset < data.count {
         let lineStart = offset
         let newline = data[lineStart...].firstIndex(of: 0x0A) ?? data.count
         offset = newline < data.count ? newline + 1 : data.count
         guard newline > lineStart,
-              let object = try? JSONSerialization.jsonObject(with: data[lineStart..<newline]) as? [String: Any] else { continue }
+              let object = try? YYJSONValue(data: data[lineStart..<newline]) else { continue }
         objects.append(object)
     }
     return objects
 }
 
-private func copilotTraceContexts(_ objects: [[String: Any]]) -> [String: CopilotTraceContext] {
+private func copilotTraceContexts(_ objects: [YYJSONValue]) -> [String: CopilotTraceContext] {
     var contexts: [String: CopilotTraceContext] = [:]
     for object in objects {
         guard let traceID = copilotTraceID(object),
-              let attributes = object["attributes"] as? [String: Any] else { continue }
+              let attributes = object["attributes"] else { continue }
         var context = contexts[traceID] ?? CopilotTraceContext()
         if context.model == nil {
             context.model = firstString(in: attributes, keys: copilotModelAttributeKeys)
@@ -91,7 +92,7 @@ private func copilotTraceContexts(_ objects: [[String: Any]]) -> [String: Copilo
 private let copilotModelAttributeKeys = ["gen_ai.response.model", "gen_ai.request.model"]
 
 private func copilotCandidate(
-    from object: [String: Any],
+    from object: YYJSONValue,
     index: Int,
     fallback: Date,
     contexts: [String: CopilotTraceContext],
@@ -99,7 +100,7 @@ private func copilotCandidate(
     descriptor: AgentSourceDescriptor,
     pricing: PricingProvider
 ) -> CopilotCandidate? {
-    guard let attributes = object["attributes"] as? [String: Any] else { return nil }
+    guard let attributes = object["attributes"] else { return nil }
     let source: CopilotUsageSource
     if isCopilotChatSpan(object, attributes: attributes) {
         source = .chatSpan
@@ -156,37 +157,37 @@ private func shouldEmitCopilotCandidate(_ candidate: CopilotCandidate, in candid
     }
 }
 
-private func isCopilotSpan(_ object: [String: Any]) -> Bool {
+private func isCopilotSpan(_ object: YYJSONValue) -> Bool {
     if string(object["type"]) == "span" { return true }
     return string(object["name"]) != nil
         && (string(object["spanId"]) != nil || string(object["traceId"]) != nil || object["startTime"] != nil || object["endTime"] != nil || object["duration"] != nil || object["kind"] != nil)
 }
 
-private func isCopilotChatSpan(_ object: [String: Any], attributes: [String: Any]) -> Bool {
+private func isCopilotChatSpan(_ object: YYJSONValue, attributes: YYJSONValue) -> Bool {
     isCopilotSpan(object)
         && (string(attributes["gen_ai.operation.name"]) == "chat" || string(object["name"])?.hasPrefix("chat ") == true)
 }
 
-private func isCopilotAgentSummarySpan(_ object: [String: Any], attributes: [String: Any]) -> Bool {
+private func isCopilotAgentSummarySpan(_ object: YYJSONValue, attributes: YYJSONValue) -> Bool {
     isCopilotSpan(object)
         && (string(attributes["gen_ai.operation.name"]) == "invoke_agent" || string(object["name"])?.hasPrefix("invoke_agent ") == true)
 }
 
-private func isCopilotInferenceLog(_ object: [String: Any], attributes: [String: Any]) -> Bool {
+private func isCopilotInferenceLog(_ object: YYJSONValue, attributes: YYJSONValue) -> Bool {
     !isCopilotSpan(object)
         && (string(attributes["event.name"]) == "gen_ai.client.inference.operation.details" || copilotRecordBody(object)?.hasPrefix("GenAI inference:") == true)
 }
 
-private func isCopilotAgentTurnLog(_ object: [String: Any], attributes: [String: Any]) -> Bool {
+private func isCopilotAgentTurnLog(_ object: YYJSONValue, attributes: YYJSONValue) -> Bool {
     !isCopilotSpan(object)
         && (string(attributes["event.name"]) == "copilot_chat.agent.turn" || copilotRecordBody(object)?.hasPrefix("copilot_chat.agent.turn") == true)
 }
 
-private func copilotRecordBody(_ object: [String: Any]) -> String? {
+private func copilotRecordBody(_ object: YYJSONValue) -> String? {
     string(object["body"]) ?? string(object["_body"])
 }
 
-private func copilotBestSessionAttribute(_ attributes: [String: Any]) -> (value: String, priority: Int)? {
+private func copilotBestSessionAttribute(_ attributes: YYJSONValue) -> (value: String, priority: Int)? {
     [
         ("gen_ai.conversation.id", 3),
         ("copilot_chat.session_id", 3),
@@ -199,15 +200,15 @@ private func copilotBestSessionAttribute(_ attributes: [String: Any]) -> (value:
     .max { $0.priority < $1.priority }
 }
 
-private func copilotTraceID(_ object: [String: Any]) -> String? {
-    string(object["traceId"])?.nonEmpty ?? ((object["spanContext"] as? [String: Any]).flatMap { string($0["traceId"])?.nonEmpty })
+private func copilotTraceID(_ object: YYJSONValue) -> String? {
+    string(object["traceId"])?.nonEmpty ?? object["spanContext"].flatMap { string($0["traceId"])?.nonEmpty }
 }
 
-private func copilotSpanID(_ object: [String: Any]) -> String? {
-    string(object["spanId"])?.nonEmpty ?? ((object["spanContext"] as? [String: Any]).flatMap { string($0["spanId"])?.nonEmpty })
+private func copilotSpanID(_ object: YYJSONValue) -> String? {
+    string(object["spanId"])?.nonEmpty ?? object["spanContext"].flatMap { string($0["spanId"])?.nonEmpty }
 }
 
-private func copilotDedupKey(source: CopilotUsageSource, object: [String: Any], attributes: [String: Any], traceID: String?, sessionID: String, timestamp: Date, index: Int) -> String {
+private func copilotDedupKey(source: CopilotUsageSource, object: YYJSONValue, attributes: YYJSONValue, traceID: String?, sessionID: String, timestamp: Date, index: Int) -> String {
     let millis = Int(timestamp.timeIntervalSince1970 * 1_000)
     let spanID = copilotSpanID(object)
     switch source {
@@ -223,7 +224,7 @@ private func copilotDedupKey(source: CopilotUsageSource, object: [String: Any], 
     }
 }
 
-private func copilotTimestamp(_ object: [String: Any]) -> Date? {
+private func copilotTimestamp(_ object: YYJSONValue) -> Date? {
     copilotTimestampFromParts(object["endTime"])
         ?? copilotTimestampFromParts(object["startTime"])
         ?? copilotTimestampFromParts(object["hrTime"])
@@ -234,14 +235,14 @@ private func copilotTimestamp(_ object: [String: Any]) -> Date? {
         ?? copilotTimestampFromUnixNanos(object["timeUnixNano"])
 }
 
-private func copilotTimestampFromParts(_ value: Any?) -> Date? {
-    guard let array = value as? [Any],
-          let seconds = double(array.first),
-          let nanos = array.dropFirst().first.flatMap(double) else { return nil }
+private func copilotTimestampFromParts(_ value: YYJSONValue?) -> Date? {
+    guard let array = value?.array,
+          let seconds = double(array[0]),
+          let nanos = double(array[1]) else { return nil }
     return Date(timeIntervalSince1970: seconds + nanos / 1_000_000_000)
 }
 
-private func copilotTimestampFromScalar(_ value: Any?) -> Date? {
+private func copilotTimestampFromScalar(_ value: YYJSONValue?) -> Date? {
     guard let raw = double(value), raw > 0 else { return nil }
     let seconds: Double
     if raw >= 100_000_000_000_000_000 {
@@ -256,7 +257,7 @@ private func copilotTimestampFromScalar(_ value: Any?) -> Date? {
     return Date(timeIntervalSince1970: seconds)
 }
 
-private func copilotTimestampFromUnixNanos(_ value: Any?) -> Date? {
+private func copilotTimestampFromUnixNanos(_ value: YYJSONValue?) -> Date? {
     guard let raw = double(value), raw > 0 else { return nil }
     return Date(timeIntervalSince1970: raw / 1_000_000_000)
 }

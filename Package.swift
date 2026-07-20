@@ -12,7 +12,8 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/groue/GRDB.swift.git", from: "6.29.0"),
-        .package(url: "https://github.com/sparkle-project/Sparkle", exact: "2.9.4")
+        .package(url: "https://github.com/sparkle-project/Sparkle", exact: "2.9.4"),
+        .package(url: "https://github.com/mattt/swift-yyjson.git", from: "0.6.0")
     ],
     targets: [
         // MARK: - Core (no internal dependencies; defines the extensibility contract)
@@ -90,6 +91,7 @@ let package = Package(
             dependencies: [
                 "VibeUsageCore",
                 "VibeUsagePricing",
+                .product(name: "YYJSON", package: "swift-yyjson"),
                 .product(name: "GRDB", package: "GRDB.swift")
             ]
         ),

@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 import Testing
 import VibeUsageCore
@@ -205,11 +206,108 @@ import VibeUsageStorage
     #expect(summary.insertedEvents == 1)
 }
 
+@Test func ingestorParsesFilesWithoutSaturatingMultipleCores() async throws {
+    let root = FileManager.default.temporaryDirectory
+        .appendingPathComponent("vibe-usage-concurrency-\(UUID().uuidString)", isDirectory: true)
+    try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: root) }
+
+    for index in 0..<4 {
+        try Data([UInt8(index)]).write(to: root.appendingPathComponent("events-\(index).jsonl"))
+    }
+
+    let tracker = ParseConcurrencyTracker()
+    let registry = AdapterRegistry()
+    registry.register(ConcurrencyTrackingAdapter(root: root, tracker: tracker))
+    let store = GRDBUsageEventStore(database: try UsageDatabase())
+    let ingestor = UsageIngestor(registry: registry, store: store, pricing: BundledPricingProvider())
+
+    let summary = try await ingestor.scanOnce()
+
+    #expect(summary.scannedFiles == 4)
+    #expect(tracker.maximumConcurrentParses == 1)
+    #expect(tracker.maximumQoSClass <= QOS_CLASS_UTILITY.rawValue)
+}
+
 @Test func watchPathsNormalizeSQLiteSidecars() {
     let db = "/tmp/opencode.db"
     #expect(UsageWatchPaths.canonicalWatchPath(db + "-wal") == db)
     #expect(UsageWatchPaths.canonicalWatchPath(db + "-shm") == db)
     #expect(UsageWatchPaths.file(db, matchesChangedPaths: [db + "-wal"]))
+}
+
+private final class ParseConcurrencyTracker: @unchecked Sendable {
+    private let lock = NSLock()
+    private var activeParses = 0
+    private var recordedMaximum = 0
+    private var recordedMaximumQoSClass: qos_class_t.RawValue = 0
+
+    var maximumConcurrentParses: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return recordedMaximum
+    }
+
+    var maximumQoSClass: qos_class_t.RawValue {
+        lock.lock()
+        defer { lock.unlock() }
+        return recordedMaximumQoSClass
+    }
+
+    func begin(qosClass: qos_class_t.RawValue) {
+        lock.lock()
+        activeParses += 1
+        recordedMaximum = max(recordedMaximum, activeParses)
+        recordedMaximumQoSClass = max(recordedMaximumQoSClass, qosClass)
+        lock.unlock()
+    }
+
+    func end() {
+        lock.lock()
+        activeParses -= 1
+        lock.unlock()
+    }
+}
+
+private struct ConcurrencyTrackingAdapter: UsageSourceAdapter {
+    let root: URL
+    let tracker: ParseConcurrencyTracker
+
+    var descriptor: AgentSourceDescriptor {
+        AgentSourceDescriptor(
+            id: AgentSourceID(rawValue: "concurrency-test"),
+            displayName: "Concurrency Test",
+            shortLabel: "Concurrency",
+            iconSystemName: "gauge.with.dots.needle.67percent",
+            tintColorHex: "#000000",
+            sortOrder: 0
+        )
+    }
+
+    func discoverRootDirectories() -> [URL] { [root] }
+
+    func discoverFiles(in roots: [URL]) throws -> [DiscoveredFile] {
+        try roots.flatMap { root in
+            try FileManager.default.contentsOfDirectory(
+                at: root,
+                includingPropertiesForKeys: nil
+            ).map { DiscoveredFile(path: $0.path, sourceID: descriptor.id) }
+        }
+    }
+
+    func parseIncrementally(
+        fileAt path: String,
+        from checkpoint: ParseCheckpoint?,
+        pricing: any PricingProvider
+    ) throws -> ParseResult {
+        tracker.begin(qosClass: qos_class_self().rawValue)
+        defer { tracker.end() }
+        Thread.sleep(forTimeInterval: 0.1)
+        return ParseResult(
+            events: [],
+            newCheckpoint: ParseCheckpoint(byteOffset: 1, lineIndex: 1)
+        )
+    }
 }
 
 private actor RefreshCounter {

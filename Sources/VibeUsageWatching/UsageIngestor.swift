@@ -30,6 +30,9 @@ public final class UsageIngestor: Sendable {
     private let registry: AdapterRegistry
     private let store: any UsageEventStore
     private let pricing: any PricingProvider
+    /// Parsing is CPU-bound. Keep it serial and below user-initiated work so a
+    /// large first import cannot make the rest of the system unresponsive.
+    private let parseQueue = DispatchQueue(label: "com.vibeusage.ingestion-parse", qos: .utility)
 
     public init(
         registry: AdapterRegistry = .shared,
@@ -107,31 +110,23 @@ public final class UsageIngestor: Sendable {
     }
 
     private func parse(jobs: [ScanJob], adapter: any UsageSourceAdapter) async throws -> [ParsedJob] {
-        let workerLimit = max(1, min(ProcessInfo.processInfo.activeProcessorCount, 8))
-        var results: [ParsedJob] = []
-        results.reserveCapacity(jobs.count)
-
-        try await withThrowingTaskGroup(of: ParsedJob.self) { group in
-            var iterator = jobs.makeIterator()
-            for _ in 0..<workerLimit {
-                guard let job = iterator.next() else { break }
-                group.addTask { [pricing] in
-                    let result = try adapter.parseIncrementally(fileAt: job.file.path, from: job.checkpoint, pricing: pricing)
-                    return ParsedJob(job: job, result: result)
-                }
-            }
-
-            while let parsed = try await group.next() {
-                results.append(parsed)
-                if let next = iterator.next() {
-                    group.addTask { [pricing] in
-                        let result = try adapter.parseIncrementally(fileAt: next.file.path, from: next.checkpoint, pricing: pricing)
-                        return ParsedJob(job: next, result: result)
+        try await withCheckedThrowingContinuation { continuation in
+            parseQueue.async { [pricing] in
+                do {
+                    let results = try jobs.map { job in
+                        let result = try adapter.parseIncrementally(
+                            fileAt: job.file.path,
+                            from: job.checkpoint,
+                            pricing: pricing
+                        )
+                        return ParsedJob(job: job, result: result)
                     }
+                    continuation.resume(returning: results)
+                } catch {
+                    continuation.resume(throwing: error)
                 }
             }
         }
-        return results
     }
 
     private static func fileWasModified(after stored: Date?, currentModifiedAt: Date?) -> Bool {

@@ -2,6 +2,7 @@ import Foundation
 import GRDB
 import VibeUsageCore
 import VibeUsagePricing
+import YYJSON
 
 /// Contiguous JSONL bytes plus absolute file offsets for checkpointing.
 struct JSONLByteSlice: Sendable {
@@ -60,7 +61,7 @@ func forEachJSONLLine(
     }
 }
 
-func parseJSONLines(path: String, checkpoint: ParseCheckpoint?, transform: ([String: Any], Int) -> UsageEvent?) throws -> ParseResult {
+func parseJSONLines(path: String, checkpoint: ParseCheckpoint?, transform: (YYJSONValue, Int) -> UsageEvent?) throws -> ParseResult {
     let slice = try loadJSONLBytes(path: path, from: checkpoint)
     if slice.endOffset == 0, (checkpoint?.byteOffset ?? 0) > 0 {
         return ParseResult(events: [], newCheckpoint: .start)
@@ -71,7 +72,7 @@ func parseJSONLines(path: String, checkpoint: ParseCheckpoint?, transform: ([Str
     forEachJSONLLine(in: slice, startingLineIndex: lineIndex) { line, _, currentLineIndex in
         lineIndex = currentLineIndex + 1
         guard !line.isEmpty,
-              let object = try? JSONSerialization.jsonObject(with: line) as? [String: Any],
+              let object = try? YYJSONValue(data: line),
               let event = transform(object, currentLineIndex + 1) else { return }
         events.append(event)
     }
@@ -168,7 +169,7 @@ struct SQLiteSessionFingerprints: Codable, Sendable, Equatable {
 
 func decodeAdapterState<T: Decodable>(_ type: T.Type, from checkpoint: ParseCheckpoint?) -> T? {
     guard let data = checkpoint?.adapterState else { return nil }
-    return try? JSONDecoder().decode(type, from: data)
+    return try? YYJSONDecoder().decode(type, from: data)
 }
 
 func encodeAdapterState<T: Encodable>(_ value: T) -> Data? {
@@ -211,10 +212,10 @@ func dedup(_ urls: [URL]) -> [URL] {
 }
 
 
-func jsonObjectFile(_ path: String) throws -> Any? {
+func jsonValueFile(_ path: String) throws -> YYJSONValue? {
     let data = try Data(contentsOf: URL(fileURLWithPath: path))
     guard !data.isEmpty else { return nil }
-    return try JSONSerialization.jsonObject(with: data)
+    return try YYJSONValue(data: data)
 }
 
 func tableExists(_ name: String, in db: Database) throws -> Bool {
@@ -228,9 +229,9 @@ func columnExists(_ column: String, in table: String, database: Database) throws
         }
 }
 
-func jsonObject(from text: String) -> [String: Any]? {
+func jsonValue(from text: String) -> YYJSONValue? {
     guard let data = text.data(using: .utf8) else { return nil }
-    return try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+    return try? YYJSONValue(data: data)
 }
 
 func dictionary(from row: Row) -> [String: Any] {
@@ -286,6 +287,81 @@ func nestedInt(in object: [String: Any], path: [String]) -> Int? {
         current = (current as? [String: Any])?[part]
     }
     return int(current)
+}
+
+func firstString(in object: YYJSONValue, keys: [String]) -> String? {
+    keys.lazy.compactMap { string(object[$0])?.nonEmpty }.first
+}
+
+func firstInt(in object: YYJSONValue, keys: [String]) -> Int? {
+    keys.lazy.compactMap { int(object[$0]) }.first
+}
+
+func firstNumber(in object: YYJSONValue, keys: [String]) -> Double? {
+    keys.lazy.compactMap { double(object[$0]) }.first
+}
+
+func firstDecimal(in object: YYJSONValue, keys: [String]) -> Decimal? {
+    keys.lazy.compactMap { decimal(object[$0]) }.first
+}
+
+func firstDate(in object: YYJSONValue, keys: [String]) -> Date? {
+    for key in keys {
+        if let value = string(object[key]), let date = Date.vibeUsageParse(value) {
+            return date
+        }
+        if let value = double(object[key]) {
+            return Date.vibeUsageParse(value)
+        }
+    }
+    return nil
+}
+
+func nestedInt(in object: YYJSONValue, path: [String]) -> Int? {
+    var current: YYJSONValue? = object
+    for part in path {
+        current = current?[part]
+    }
+    return int(current)
+}
+
+func string(_ value: YYJSONValue?) -> String? {
+    guard let value else { return nil }
+    if let string = value.string {
+        return string.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+    guard let number = value.number, number.isFinite else { return nil }
+    if number.rounded(.towardZero) == number,
+       number >= Double(Int64.min),
+       number <= Double(Int64.max) {
+        return String(Int64(number))
+    }
+    return String(number)
+}
+
+func int(_ value: YYJSONValue?) -> Int? {
+    guard let value else { return nil }
+    if let number = value.number {
+        guard number.isFinite,
+              number >= Double(Int.min),
+              number <= Double(Int.max) else { return nil }
+        return Int(number)
+    }
+    return value.string.flatMap { Int($0.trimmingCharacters(in: .whitespacesAndNewlines)) }
+}
+
+func double(_ value: YYJSONValue?) -> Double? {
+    guard let value else { return nil }
+    return value.number
+        ?? value.string.flatMap { Double($0.trimmingCharacters(in: .whitespacesAndNewlines)) }
+}
+
+func decimal(_ value: YYJSONValue?) -> Decimal? {
+    guard let value else { return nil }
+    return value.decimal
+        ?? value.string.flatMap {
+            Decimal(string: $0.trimmingCharacters(in: .whitespacesAndNewlines), locale: Locale(identifier: "en_US_POSIX"))
+        }
 }
 
 func string(_ value: Any?) -> String? {
@@ -398,9 +474,12 @@ extension String {
 }
 
 extension Date {
+    private static let vibeUsageFractionalStyle = Date.ISO8601FormatStyle(includingFractionalSeconds: true)
+    private static let vibeUsagePlainStyle = Date.ISO8601FormatStyle(includingFractionalSeconds: false)
+
     static func vibeUsageParse(_ value: String) -> Date? {
-        ISO8601DateFormatter.vibeUsageFractional.date(from: value)
-            ?? ISO8601DateFormatter.vibeUsagePlain.date(from: value)
+        (try? vibeUsageFractionalStyle.parse(value))
+            ?? (try? vibeUsagePlainStyle.parse(value))
     }
 
     static func vibeUsageParse(_ value: Double) -> Date {
@@ -413,12 +492,6 @@ extension ISO8601DateFormatter {
     static let vibeUsageFractional: ISO8601DateFormatter = {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return formatter
-    }()
-
-    static let vibeUsagePlain: ISO8601DateFormatter = {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime]
         return formatter
     }()
 }

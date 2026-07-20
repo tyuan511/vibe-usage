@@ -2,6 +2,7 @@ import Foundation
 import GRDB
 import VibeUsageCore
 import VibeUsagePricing
+import YYJSON
 
 /// Usage adapter for [oh-my-pi](https://github.com/can1357/oh-my-pi) (`omp`).
 ///
@@ -118,7 +119,7 @@ private func ohMyPiConfigRoot(from environment: [String: String]) -> URL {
 }
 
 private func ohMyPiEvent(
-    from object: [String: Any],
+    from object: YYJSONValue,
     sessionID: String,
     path: String,
     line: Int,
@@ -128,9 +129,9 @@ private func ohMyPiEvent(
     if let type = string(object["type"]), type != "message" {
         return nil
     }
-    guard let message = object["message"] as? [String: Any],
+    guard let message = object["message"],
           string(message["role"]) == "assistant",
-          let usage = message["usage"] as? [String: Any],
+          let usage = message["usage"],
           let timestamp = firstDate(in: object, keys: ["timestamp"])
             ?? firstDate(in: message, keys: ["timestamp"])
     else {
@@ -151,7 +152,7 @@ private func ohMyPiEvent(
 
     let modelName = firstString(in: message, keys: ["model", "modelId"]) ?? "unknown"
     let model = "[omp] \(modelName)"
-    let cost = (usage["cost"] as? [String: Any]).flatMap { decimal($0["total"]) }
+    let cost = usage["cost"].flatMap { decimal($0["total"]) }
     let requestID = string(object["id"])?.nonEmpty ?? string(message["id"])?.nonEmpty
     let dedupKey: String
     if let requestID {

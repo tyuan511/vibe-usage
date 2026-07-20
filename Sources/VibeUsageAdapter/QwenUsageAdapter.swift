@@ -2,6 +2,7 @@ import Foundation
 import GRDB
 import VibeUsageCore
 import VibeUsagePricing
+import YYJSON
 
 public struct QwenUsageAdapter: UsageSourceAdapter {
     public let descriptor = makeDescriptor("qwen", "Qwen", "Qwen", "q.circle", "#8A6BBE", 20)
@@ -23,9 +24,9 @@ public struct QwenUsageAdapter: UsageSourceAdapter {
     }
 }
 
-private func qwenEvent(from object: [String: Any], path: String, line: Int, descriptor: AgentSourceDescriptor, pricing: PricingProvider) -> UsageEvent? {
+private func qwenEvent(from object: YYJSONValue, path: String, line: Int, descriptor: AgentSourceDescriptor, pricing: PricingProvider) -> UsageEvent? {
     guard string(object["type"]) == "assistant",
-          let usage = object["usageMetadata"] as? [String: Any] ?? object["usage_metadata"] as? [String: Any] else { return nil }
+          let usage = object["usageMetadata"] ?? object["usage_metadata"] else { return nil }
     let counts = applyTotalFallback(TokenCounts(
         input: firstInt(in: usage, keys: ["promptTokenCount", "prompt_token_count"]) ?? 0,
         output: firstInt(in: usage, keys: ["candidatesTokenCount", "candidates_token_count"]) ?? 0,

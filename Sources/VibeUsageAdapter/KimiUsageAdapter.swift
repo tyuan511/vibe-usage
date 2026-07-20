@@ -2,6 +2,7 @@ import Foundation
 import GRDB
 import VibeUsageCore
 import VibeUsagePricing
+import YYJSON
 
 public struct KimiUsageAdapter: UsageSourceAdapter {
     public let descriptor = makeDescriptor("kimi", "Kimi", "Kimi", "moon", "#2F7DA8", 19)
@@ -24,11 +25,11 @@ public struct KimiUsageAdapter: UsageSourceAdapter {
     }
 }
 
-private func kimiEvent(from object: [String: Any], model: String, path: String, line: Int, descriptor: AgentSourceDescriptor, pricing: PricingProvider) -> UsageEvent? {
-    guard let message = object["message"] as? [String: Any],
+private func kimiEvent(from object: YYJSONValue, model: String, path: String, line: Int, descriptor: AgentSourceDescriptor, pricing: PricingProvider) -> UsageEvent? {
+    guard let message = object["message"],
           string(message["type"]) == "StatusUpdate",
-          let payload = message["payload"] as? [String: Any],
-          let usage = payload["token_usage"] as? [String: Any],
+          let payload = message["payload"],
+          let usage = payload["token_usage"],
           let timestamp = firstDate(in: object, keys: ["timestamp"]) else { return nil }
     let counts = TokenCounts(
         input: int(usage["input_other"]) ?? 0,
@@ -47,7 +48,7 @@ private func kimiModel(forWireFile path: String) -> String? {
         root.deleteLastPathComponent()
     }
     let config = root.appendingPathComponent("config.json")
-    guard let object = try? jsonObjectFile(config.path) as? [String: Any] else { return nil }
+    guard let object = try? jsonValueFile(config.path) else { return nil }
     return firstString(in: object, keys: ["model"])
 }
 

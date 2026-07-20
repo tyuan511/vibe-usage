@@ -2,6 +2,7 @@ import Foundation
 import GRDB
 import VibeUsageCore
 import VibeUsagePricing
+import YYJSON
 
 public struct GeminiUsageAdapter: UsageSourceAdapter {
     public let descriptor = makeDescriptor("gemini-cli", "Gemini CLI", "Gemini", "diamond", "#3E73B8", 22)
@@ -28,16 +29,16 @@ public struct GeminiUsageAdapter: UsageSourceAdapter {
                 return geminiEvent(from: object, sessionID: sessionID, project: project, path: path, line: line, descriptor: descriptor, pricing: pricing)
             }
         }
-        guard let value = try jsonObjectFile(path) else {
+        guard let value = try jsonValueFile(path) else {
             return wholeFileResult([], path: path)
         }
         return wholeFileResult(geminiEvents(from: value, path: path, descriptor: descriptor, pricing: pricing), path: path)
     }
 }
 
-private func geminiEvent(from object: [String: Any], sessionID: String, project: String?, path: String, line: Int, descriptor: AgentSourceDescriptor, pricing: PricingProvider) -> UsageEvent? {
+private func geminiEvent(from object: YYJSONValue, sessionID: String, project: String?, path: String, line: Int, descriptor: AgentSourceDescriptor, pricing: PricingProvider) -> UsageEvent? {
     guard string(object["type"]) == "gemini",
-          let tokens = object["tokens"] as? [String: Any],
+          let tokens = object["tokens"],
           let timestamp = firstDate(in: object, keys: ["timestamp"]) else { return nil }
     let cached = int(tokens["cached"]) ?? 0
     let input = int(tokens["input"]) ?? 0
@@ -53,12 +54,12 @@ private func geminiEvent(from object: [String: Any], sessionID: String, project:
     return makeEvent(sourceID: descriptor.id, timestamp: timestamp, sessionID: sessionID, project: project ?? "Gemini CLI", requestID: firstString(in: object, keys: ["id"]), model: model, tokens: counts, displayCost: nil, pricing: pricing, pricingCandidates: geminiModelCandidates(model: model), dedupKey: "\(descriptor.id.rawValue):\(path):\(line)", path: path, line: line)
 }
 
-private func geminiEvents(from value: Any, path: String, descriptor: AgentSourceDescriptor, pricing: PricingProvider) -> [UsageEvent] {
-    if let array = value as? [[String: Any]] {
+private func geminiEvents(from value: YYJSONValue, path: String, descriptor: AgentSourceDescriptor, pricing: PricingProvider) -> [UsageEvent] {
+    if let array = value.array {
         return array.enumerated().compactMap { geminiEvent(from: $0.element, sessionID: sessionIDFromPath(path), project: projectPath(from: path), path: path, line: $0.offset + 1, descriptor: descriptor, pricing: pricing) }
     }
-    if let object = value as? [String: Any],
-       let event = geminiEvent(from: object, sessionID: sessionIDFromPath(path), project: projectPath(from: path), path: path, line: 1, descriptor: descriptor, pricing: pricing) {
+    if value.object != nil,
+       let event = geminiEvent(from: value, sessionID: sessionIDFromPath(path), project: projectPath(from: path), path: path, line: 1, descriptor: descriptor, pricing: pricing) {
         return [event]
     }
     return []

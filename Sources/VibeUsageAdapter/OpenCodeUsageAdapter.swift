@@ -2,6 +2,7 @@ import Foundation
 import GRDB
 import VibeUsageCore
 import VibeUsagePricing
+import YYJSON
 
 public struct OpenCodeUsageAdapter: UsageSourceAdapter {
     public let descriptor = makeDescriptor("opencode", "OpenCode", "OpenCode", "chevron.left.forwardslash.chevron.right", "#5E8C31", 10)
@@ -26,24 +27,24 @@ public struct OpenCodeUsageAdapter: UsageSourceAdapter {
         if path.hasSuffix(".db") {
             return try parseOpenCodeDatabase(path: path, checkpoint: checkpoint, descriptor: descriptor, pricing: pricing)
         }
-        let object = try jsonObjectFile(path) as? [String: Any]
+        let object = try jsonValueFile(path)
         let event = object.flatMap { openCodeEvent(from: $0, path: path, descriptor: descriptor, pricing: pricing) }
         return wholeFileResult([event].compactMap(\.self), path: path)
     }
 }
 
 private func openCodeEvent(
-    from object: [String: Any],
+    from object: YYJSONValue,
     path: String,
     descriptor: AgentSourceDescriptor,
     pricing: PricingProvider,
     rowID: String? = nil,
     rowSessionID: String? = nil
 ) -> UsageEvent? {
-    guard let tokens = object["tokens"] as? [String: Any],
+    guard let tokens = object["tokens"],
           let provider = firstString(in: object, keys: ["providerID", "providerId"]),
           let model = firstString(in: object, keys: ["modelID", "modelId", "model"]) else { return nil }
-    let cache = tokens["cache"] as? [String: Any]
+    let cache = tokens["cache"]
     let counts = applyTotalFallback(
         TokenCounts(
             input: int(tokens["input"]) ?? 0,
@@ -86,7 +87,7 @@ private func parseOpenCodeDatabase(
             let rowid = Int64.fromDatabaseValue(row["rowid"]) ?? 0
             maxRowID = max(maxRowID, rowid)
             guard let data = String.fromDatabaseValue(row["data"]),
-                  let object = jsonObject(from: data) else { continue }
+                  let object = jsonValue(from: data) else { continue }
             let rowID = String.fromDatabaseValue(row["id"])
             let rowSessionID = String.fromDatabaseValue(row["session_id"])
             if let event = openCodeEvent(from: object, path: path, descriptor: descriptor, pricing: pricing, rowID: rowID, rowSessionID: rowSessionID) {

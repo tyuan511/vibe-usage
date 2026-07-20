@@ -2,6 +2,7 @@ import Foundation
 import GRDB
 import VibeUsageCore
 import VibeUsagePricing
+import YYJSON
 
 public struct DroidUsageAdapter: UsageSourceAdapter {
     public let descriptor = makeDescriptor("droid", "Droid", "Droid", "cpu", "#4B8F5A", 12)
@@ -17,7 +18,7 @@ public struct DroidUsageAdapter: UsageSourceAdapter {
     }
 
     public func parseIncrementally(fileAt path: String, from _: ParseCheckpoint?, pricing: PricingProvider) throws -> ParseResult {
-        guard let object = try jsonObjectFile(path) as? [String: Any],
+        guard let object = try jsonValueFile(path),
               let event = droidEvent(from: object, path: path, descriptor: descriptor, pricing: pricing) else {
             return wholeFileResult([], path: path)
         }
@@ -25,8 +26,8 @@ public struct DroidUsageAdapter: UsageSourceAdapter {
     }
 }
 
-private func droidEvent(from object: [String: Any], path: String, descriptor: AgentSourceDescriptor, pricing: PricingProvider) -> UsageEvent? {
-    guard let usage = object["tokenUsage"] as? [String: Any] else { return nil }
+private func droidEvent(from object: YYJSONValue, path: String, descriptor: AgentSourceDescriptor, pricing: PricingProvider) -> UsageEvent? {
+    guard let usage = object["tokenUsage"] else { return nil }
     let counts = applyTotalFallback(TokenCounts(
         input: int(usage["inputTokens"]) ?? 0,
         output: int(usage["outputTokens"]) ?? 0,

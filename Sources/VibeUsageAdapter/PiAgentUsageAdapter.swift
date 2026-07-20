@@ -2,6 +2,7 @@ import Foundation
 import GRDB
 import VibeUsageCore
 import VibeUsagePricing
+import YYJSON
 
 public struct PiAgentUsageAdapter: UsageSourceAdapter {
     public let descriptor = makeDescriptor("pi-agent", "pi-agent", "pi", "smallcircle.filled.circle", "#9A6A2F", 15)
@@ -23,13 +24,13 @@ public struct PiAgentUsageAdapter: UsageSourceAdapter {
     }
 }
 
-private func piEvent(from object: [String: Any], path: String, line: Int, descriptor: AgentSourceDescriptor, pricing: PricingProvider) -> UsageEvent? {
+private func piEvent(from object: YYJSONValue, path: String, line: Int, descriptor: AgentSourceDescriptor, pricing: PricingProvider) -> UsageEvent? {
     if let type = string(object["type"]), type != "message" {
         return nil
     }
-    guard let message = object["message"] as? [String: Any],
+    guard let message = object["message"],
           string(message["role"]) == "assistant",
-          let usage = message["usage"] as? [String: Any],
+          let usage = message["usage"],
           let timestamp = firstDate(in: object, keys: ["timestamp"]) else { return nil }
     let counts = applyTotalFallback(TokenCounts(
         input: int(usage["input"]) ?? 0,
@@ -39,7 +40,7 @@ private func piEvent(from object: [String: Any], path: String, line: Int, descri
     ), total: int(usage["totalTokens"]) ?? 0)
     guard counts.total > 0 else { return nil }
     let model = string(message["model"]).map { "[pi] \($0)" } ?? "[pi] unknown"
-    let cost = (usage["cost"] as? [String: Any]).flatMap { decimal($0["total"]) }
+    let cost = usage["cost"].flatMap { decimal($0["total"]) }
     return makeEvent(sourceID: descriptor.id, timestamp: timestamp, sessionID: piSessionID(from: path), project: piProject(from: path), requestID: nil, model: model, tokens: counts, displayCost: cost, pricing: pricing, dedupKey: "\(descriptor.id.rawValue):\(path):\(line)", path: path, line: line)
 }
 

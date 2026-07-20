@@ -2,6 +2,7 @@ import Foundation
 import GRDB
 import VibeUsageCore
 import VibeUsagePricing
+import YYJSON
 
 public struct AmpUsageAdapter: UsageSourceAdapter {
     public let descriptor = makeDescriptor("amp", "Amp", "Amp", "bolt", "#B45F06", 11)
@@ -17,23 +18,23 @@ public struct AmpUsageAdapter: UsageSourceAdapter {
     }
 
     public func parseIncrementally(fileAt path: String, from _: ParseCheckpoint?, pricing: PricingProvider) throws -> ParseResult {
-        guard let object = try jsonObjectFile(path) as? [String: Any] else {
+        guard let object = try jsonValueFile(path) else {
             return wholeFileResult([], path: path)
         }
         return wholeFileResult(ampEvents(from: object, path: path, descriptor: descriptor, pricing: pricing), path: path)
     }
 }
 
-private func ampEvents(from object: [String: Any], path: String, descriptor: AgentSourceDescriptor, pricing: PricingProvider) -> [UsageEvent] {
+private func ampEvents(from object: YYJSONValue, path: String, descriptor: AgentSourceDescriptor, pricing: PricingProvider) -> [UsageEvent] {
     guard let threadID = firstString(in: object, keys: ["id"]) else { return [] }
-    let messages = object["messages"] as? [[String: Any]] ?? []
-    if let ledger = object["usageLedger"] as? [String: Any],
-       let events = ledger["events"] as? [[String: Any]] {
+    let messages = object["messages"]?.array.map(Array.init) ?? []
+    if let ledger = object["usageLedger"],
+       let events = ledger["events"]?.array {
         let cacheByMessageID = ampCacheTokensByMessageID(messages)
         return events.enumerated().compactMap { index, event in
             guard let timestamp = firstDate(in: event, keys: ["timestamp"]),
                   let model = firstString(in: event, keys: ["model"]),
-                  let tokenObject = event["tokens"] as? [String: Any] else { return nil }
+                  let tokenObject = event["tokens"] else { return nil }
             let cache = int(event["toMessageId"]).flatMap { cacheByMessageID[$0] } ?? TokenCounts.zero
             let counts = applyTotalFallback(
                 TokenCounts(
@@ -50,7 +51,7 @@ private func ampEvents(from object: [String: Any], path: String, descriptor: Age
     }
     return messages.enumerated().compactMap { index, message in
         guard string(message["role"]) == "assistant",
-              let usage = message["usage"] as? [String: Any],
+              let usage = message["usage"],
               let timestamp = firstDate(in: usage, keys: ["timestamp"]) ?? firstDate(in: message, keys: ["timestamp"]),
               let model = firstString(in: usage, keys: ["model"]) ?? firstString(in: message, keys: ["model"]) else { return nil }
         let counts = applyTotalFallback(TokenCounts(
@@ -64,12 +65,12 @@ private func ampEvents(from object: [String: Any], path: String, descriptor: Age
     }
 }
 
-private func ampCacheTokensByMessageID(_ messages: [[String: Any]]) -> [Int: TokenCounts] {
+private func ampCacheTokensByMessageID(_ messages: [YYJSONValue]) -> [Int: TokenCounts] {
     var cacheByID: [Int: TokenCounts] = [:]
     for message in messages {
         guard string(message["role"]) == "assistant",
               let id = int(message["messageId"]),
-              let usage = message["usage"] as? [String: Any] else { continue }
+              let usage = message["usage"] else { continue }
         cacheByID[id] = TokenCounts(
             cacheCreate: int(usage["cacheCreationInputTokens"]) ?? 0,
             cacheRead: int(usage["cacheReadInputTokens"]) ?? 0

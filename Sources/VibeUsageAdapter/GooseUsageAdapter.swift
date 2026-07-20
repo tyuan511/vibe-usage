@@ -2,6 +2,7 @@ import Foundation
 import GRDB
 import VibeUsageCore
 import VibeUsagePricing
+import YYJSON
 
 public struct GooseUsageAdapter: UsageSourceAdapter {
     public let descriptor = makeDescriptor("goose", "Goose", "Goose", "paperplane", "#5D7991", 16)
@@ -90,8 +91,7 @@ private func parseGooseDatabase(
 
 private func modelFromConfig(_ value: String?) -> String? {
     guard let value,
-          let data = value.data(using: .utf8),
-          let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+          let object = jsonValue(from: value) else { return nil }
     return firstString(in: object, keys: ["model_name", "modelName", "model"])
 }
 
