@@ -324,6 +324,16 @@
     "inputPerMillion": 1.5,
     "outputPerMillion": 9.0
   },
+  "gemini-3.5-flash-lite": {
+    "cacheReadPerMillion": 0.03,
+    "inputPerMillion": 0.3,
+    "outputPerMillion": 2.5
+  },
+  "gemini-3.6-flash": {
+    "cacheReadPerMillion": 0.15,
+    "inputPerMillion": 1.5,
+    "outputPerMillion": 7.5
+  },
   "gemini-embedding-001": {
     "inputPerMillion": 0.15,
     "outputPerMillion": 0
