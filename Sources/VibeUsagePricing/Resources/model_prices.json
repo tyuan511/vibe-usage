@@ -112,6 +112,12 @@
     "inputPerMillion": 5.0,
     "outputPerMillion": 25.0
   },
+  "claude-opus-5": {
+    "cacheReadPerMillion": 0.5,
+    "cacheWritePerMillion": 6.25,
+    "inputPerMillion": 5.0,
+    "outputPerMillion": 25.0
+  },
   "claude-sonnet-4": {
     "cacheReadPerMillion": 0.3,
     "cacheWritePerMillion": 3.75,
