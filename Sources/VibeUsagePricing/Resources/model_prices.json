@@ -402,6 +402,15 @@
     "inputPerMillion": 0.3,
     "outputPerMillion": 2.5
   },
+  "gemini-robotics-er-1.6-preview": {
+    "inputPerMillion": 1.0,
+    "outputPerMillion": 5.0
+  },
+  "gemini-robotics-er-2-preview": {
+    "cacheReadPerMillion": 0.2,
+    "inputPerMillion": 2.0,
+    "outputPerMillion": 10.0
+  },
   "glm-4-32b-0414-128k": {
     "inputPerMillion": 0.1,
     "outputPerMillion": 0.1
