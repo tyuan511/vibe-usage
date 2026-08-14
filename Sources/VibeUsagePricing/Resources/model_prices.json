@@ -352,6 +352,11 @@
     "inputPerMillion": 1.5,
     "outputPerMillion": 7.5
   },
+  "gemini-3.7-flash": {
+    "cacheReadPerMillion": 0.075,
+    "inputPerMillion": 0.75,
+    "outputPerMillion": 3.75
+  },
   "gemini-embedding-001": {
     "inputPerMillion": 0.15,
     "outputPerMillion": 0
@@ -1369,5 +1374,10 @@
     "cacheReadPerMillion": 0.5,
     "inputPerMillion": 2.5,
     "outputPerMillion": 7.5
+  },
+  "qwen3.8-max": {
+    "cacheReadPerMillion": 0.25,
+    "inputPerMillion": 2.0,
+    "outputPerMillion": 6.0
   }
 }
