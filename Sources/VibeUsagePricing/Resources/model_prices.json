@@ -327,6 +327,10 @@
     "inputPerMillion": 0.75,
     "outputPerMillion": 4.5
   },
+  "gemini-3.1-flash-tts-preview": {
+    "inputPerMillion": 1.0,
+    "outputPerMillion": 20.0
+  },
   "gemini-3.1-pro-preview": {
     "cacheReadPerMillion": 0.2,
     "inputPerMillion": 2.0,
@@ -1072,6 +1076,11 @@
   },
   "grok-4.5-latest": {
     "cacheReadPerMillion": 0.3,
+    "inputPerMillion": 2.0,
+    "outputPerMillion": 6.0
+  },
+  "grok-4.6": {
+    "cacheReadPerMillion": 0.5,
     "inputPerMillion": 2.0,
     "outputPerMillion": 6.0
   },
