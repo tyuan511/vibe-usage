@@ -352,9 +352,9 @@
     "outputPerMillion": 2.5
   },
   "gemini-3.6-flash": {
-    "cacheReadPerMillion": 0.15,
-    "inputPerMillion": 1.5,
-    "outputPerMillion": 7.5
+    "cacheReadPerMillion": 0.075,
+    "inputPerMillion": 0.75,
+    "outputPerMillion": 3.75
   },
   "gemini-3.7-flash": {
     "cacheReadPerMillion": 0.075,
