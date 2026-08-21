@@ -188,16 +188,16 @@
     "outputPerMillion": 0.4
   },
   "deepseek-v4-flash": {
-    "cacheReadPerMillion": 0.0028,
+    "cacheReadPerMillion": 0.014,
     "cacheWritePerMillion": 0.0,
-    "inputPerMillion": 0.14,
-    "outputPerMillion": 0.28
+    "inputPerMillion": 0.44,
+    "outputPerMillion": 1.32
   },
   "deepseek-v4-pro": {
-    "cacheReadPerMillion": 0.003625,
+    "cacheReadPerMillion": 0.044,
     "cacheWritePerMillion": 0.0,
-    "inputPerMillion": 0.435,
-    "outputPerMillion": 0.87
+    "inputPerMillion": 1.32,
+    "outputPerMillion": 3.96
   },
   "gemini-1.5-flash": {
     "inputPerMillion": 0.075,
@@ -318,6 +318,10 @@
     "inputPerMillion": 0.25,
     "outputPerMillion": 1.5
   },
+  "gemini-3.1-flash-lite-image": {
+    "inputPerMillion": 0.25,
+    "outputPerMillion": 1.5
+  },
   "gemini-3.1-flash-lite-preview": {
     "cacheReadPerMillion": 0.025,
     "inputPerMillion": 0.25,
@@ -350,6 +354,10 @@
     "cacheReadPerMillion": 0.03,
     "inputPerMillion": 0.3,
     "outputPerMillion": 2.5
+  },
+  "gemini-3.5-live-translate-preview": {
+    "inputPerMillion": 3.5,
+    "outputPerMillion": 21.0
   },
   "gemini-3.6-flash": {
     "cacheReadPerMillion": 0.075,
@@ -885,6 +893,12 @@
     "inputPerMillion": 5.0,
     "outputPerMillion": 30.0
   },
+  "gpt-5.6-cyber": {
+    "cacheReadPerMillion": 1.25,
+    "cacheWritePerMillion": 15.625,
+    "inputPerMillion": 12.5,
+    "outputPerMillion": 75.0
+  },
   "gpt-5.6-luna": {
     "cacheReadPerMillion": 0.02,
     "cacheWritePerMillion": 0.25,
@@ -1151,6 +1165,11 @@
     "cacheReadPerMillion": 0.16,
     "inputPerMillion": 0.95,
     "outputPerMillion": 4.0
+  },
+  "kimi-k3": {
+    "cacheReadPerMillion": 0.3,
+    "inputPerMillion": 3.0,
+    "outputPerMillion": 15.0
   },
   "kimi-latest": {
     "cacheReadPerMillion": 0.15,
