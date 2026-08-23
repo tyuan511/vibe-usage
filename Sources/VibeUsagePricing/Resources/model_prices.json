@@ -319,6 +319,7 @@
     "outputPerMillion": 1.5
   },
   "gemini-3.1-flash-lite-image": {
+    "cacheReadPerMillion": 0.025,
     "inputPerMillion": 0.25,
     "outputPerMillion": 1.5
   },
@@ -888,10 +889,10 @@
     "outputPerMillion": 180.0
   },
   "gpt-5.6": {
-    "cacheReadPerMillion": 0.5,
-    "cacheWritePerMillion": 6.25,
-    "inputPerMillion": 5.0,
-    "outputPerMillion": 30.0
+    "cacheReadPerMillion": 0.4,
+    "cacheWritePerMillion": 5.0,
+    "inputPerMillion": 4.0,
+    "outputPerMillion": 20.0
   },
   "gpt-5.6-cyber": {
     "cacheReadPerMillion": 1.25,
@@ -906,10 +907,10 @@
     "outputPerMillion": 1.2
   },
   "gpt-5.6-sol": {
-    "cacheReadPerMillion": 0.5,
-    "cacheWritePerMillion": 6.25,
-    "inputPerMillion": 5.0,
-    "outputPerMillion": 30.0
+    "cacheReadPerMillion": 0.4,
+    "cacheWritePerMillion": 5.0,
+    "inputPerMillion": 4.0,
+    "outputPerMillion": 20.0
   },
   "gpt-5.6-terra": {
     "cacheReadPerMillion": 0.2,
