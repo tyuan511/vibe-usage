@@ -193,6 +193,12 @@
     "inputPerMillion": 0.44,
     "outputPerMillion": 1.32
   },
+  "deepseek-v4-flash-vision-exp": {
+    "cacheReadPerMillion": 0.014,
+    "cacheWritePerMillion": 0.0,
+    "inputPerMillion": 0.44,
+    "outputPerMillion": 1.32
+  },
   "deepseek-v4-pro": {
     "cacheReadPerMillion": 0.044,
     "cacheWritePerMillion": 0.0,
@@ -247,7 +253,7 @@
     "outputPerMillion": 0.4
   },
   "gemini-2.5-flash-lite-preview-06-17": {
-    "cacheReadPerMillion": 0.025,
+    "cacheReadPerMillion": 0.01,
     "inputPerMillion": 0.1,
     "outputPerMillion": 0.4
   },
@@ -257,25 +263,25 @@
     "outputPerMillion": 0.4
   },
   "gemini-2.5-flash-native-audio-latest": {
-    "inputPerMillion": 0.3,
-    "outputPerMillion": 2.5
+    "inputPerMillion": 0.5,
+    "outputPerMillion": 2.0
   },
   "gemini-2.5-flash-native-audio-preview-09-2025": {
-    "inputPerMillion": 0.3,
-    "outputPerMillion": 2.5
+    "inputPerMillion": 0.5,
+    "outputPerMillion": 2.0
   },
   "gemini-2.5-flash-native-audio-preview-12-2025": {
-    "inputPerMillion": 0.3,
-    "outputPerMillion": 2.5
+    "inputPerMillion": 0.5,
+    "outputPerMillion": 2.0
   },
   "gemini-2.5-flash-preview-09-2025": {
-    "cacheReadPerMillion": 0.075,
+    "cacheReadPerMillion": 0.03,
     "inputPerMillion": 0.3,
     "outputPerMillion": 2.5
   },
   "gemini-2.5-flash-preview-tts": {
-    "inputPerMillion": 0.3,
-    "outputPerMillion": 2.5
+    "inputPerMillion": 0.5,
+    "outputPerMillion": 10.0
   },
   "gemini-2.5-pro": {
     "cacheReadPerMillion": 0.125,
@@ -284,8 +290,8 @@
   },
   "gemini-2.5-pro-preview-tts": {
     "cacheReadPerMillion": 0.125,
-    "inputPerMillion": 1.25,
-    "outputPerMillion": 10.0
+    "inputPerMillion": 1.0,
+    "outputPerMillion": 20.0
   },
   "gemini-3-flash-preview": {
     "cacheReadPerMillion": 0.05,
@@ -360,6 +366,14 @@
     "inputPerMillion": 3.5,
     "outputPerMillion": 21.0
   },
+  "gemini-3.5-transcribe": {
+    "inputPerMillion": 2.0,
+    "outputPerMillion": 12.0
+  },
+  "gemini-3.5-transcribe-live": {
+    "inputPerMillion": 3.5,
+    "outputPerMillion": 21.0
+  },
   "gemini-3.6-flash": {
     "cacheReadPerMillion": 0.075,
     "inputPerMillion": 0.75,
@@ -413,9 +427,13 @@
     "inputPerMillion": 0.35,
     "outputPerMillion": 1.05
   },
+  "gemini-live-2.5-flash-native-audio": {
+    "inputPerMillion": 0.5,
+    "outputPerMillion": 2.0
+  },
   "gemini-live-2.5-flash-preview-native-audio-09-2025": {
     "cacheReadPerMillion": 0.075,
-    "inputPerMillion": 0.3,
+    "inputPerMillion": 0.5,
     "outputPerMillion": 2.0
   },
   "gemini-omni-flash-preview": {
@@ -504,6 +522,12 @@
     "outputPerMillion": 5.0
   },
   "glm-5.1": {
+    "cacheReadPerMillion": 0.26,
+    "cacheWritePerMillion": 0,
+    "inputPerMillion": 1.4,
+    "outputPerMillion": 4.4
+  },
+  "glm-5.3": {
     "cacheReadPerMillion": 0.26,
     "cacheWritePerMillion": 0,
     "inputPerMillion": 1.4,
@@ -918,30 +942,6 @@
     "inputPerMillion": 2.0,
     "outputPerMillion": 12.0
   },
-  "grok-2": {
-    "inputPerMillion": 2.0,
-    "outputPerMillion": 10.0
-  },
-  "grok-2-1212": {
-    "inputPerMillion": 2.0,
-    "outputPerMillion": 10.0
-  },
-  "grok-2-latest": {
-    "inputPerMillion": 2.0,
-    "outputPerMillion": 10.0
-  },
-  "grok-2-vision": {
-    "inputPerMillion": 2.0,
-    "outputPerMillion": 10.0
-  },
-  "grok-2-vision-1212": {
-    "inputPerMillion": 2.0,
-    "outputPerMillion": 10.0
-  },
-  "grok-2-vision-latest": {
-    "inputPerMillion": 2.0,
-    "outputPerMillion": 10.0
-  },
   "grok-3": {
     "cacheReadPerMillion": 0.75,
     "inputPerMillion": 3.0,
@@ -1099,10 +1099,6 @@
     "inputPerMillion": 2.0,
     "outputPerMillion": 6.0
   },
-  "grok-beta": {
-    "inputPerMillion": 5.0,
-    "outputPerMillion": 15.0
-  },
   "grok-build-0.1": {
     "cacheReadPerMillion": 0.2,
     "inputPerMillion": 1.0,
@@ -1122,10 +1118,6 @@
     "cacheReadPerMillion": 0.2,
     "inputPerMillion": 1.0,
     "outputPerMillion": 2.0
-  },
-  "grok-vision-beta": {
-    "inputPerMillion": 5.0,
-    "outputPerMillion": 15.0
   },
   "kimi-k2": {
     "cacheReadPerMillion": 0.15,
