@@ -436,6 +436,10 @@
     "inputPerMillion": 0.5,
     "outputPerMillion": 2.0
   },
+  "gemini-omni-1.1-flash": {
+    "inputPerMillion": 1.5,
+    "outputPerMillion": 9.0
+  },
   "gemini-omni-flash-preview": {
     "inputPerMillion": 1.5,
     "outputPerMillion": 9.0
@@ -532,6 +536,12 @@
     "cacheWritePerMillion": 0,
     "inputPerMillion": 1.4,
     "outputPerMillion": 4.4
+  },
+  "glm-5.3-flash": {
+    "cacheReadPerMillion": 0.03,
+    "cacheWritePerMillion": 0,
+    "inputPerMillion": 0.15,
+    "outputPerMillion": 0.5
   },
   "gpt-4": {
     "inputPerMillion": 30.0,
@@ -943,106 +953,114 @@
     "outputPerMillion": 12.0
   },
   "grok-3": {
-    "cacheReadPerMillion": 0.75,
-    "inputPerMillion": 3.0,
-    "outputPerMillion": 15.0
+    "cacheReadPerMillion": 0.2,
+    "inputPerMillion": 1.25,
+    "outputPerMillion": 2.5
   },
   "grok-3-beta": {
-    "cacheReadPerMillion": 0.75,
-    "inputPerMillion": 3.0,
-    "outputPerMillion": 15.0
+    "cacheReadPerMillion": 0.2,
+    "inputPerMillion": 1.25,
+    "outputPerMillion": 2.5
   },
   "grok-3-fast-beta": {
-    "cacheReadPerMillion": 1.25,
-    "inputPerMillion": 5.0,
-    "outputPerMillion": 25.0
+    "cacheReadPerMillion": 0.2,
+    "inputPerMillion": 1.25,
+    "outputPerMillion": 2.5
   },
   "grok-3-fast-latest": {
-    "cacheReadPerMillion": 1.25,
-    "inputPerMillion": 5.0,
-    "outputPerMillion": 25.0
+    "cacheReadPerMillion": 0.2,
+    "inputPerMillion": 1.25,
+    "outputPerMillion": 2.5
   },
   "grok-3-latest": {
-    "cacheReadPerMillion": 0.75,
-    "inputPerMillion": 3.0,
-    "outputPerMillion": 15.0
+    "cacheReadPerMillion": 0.2,
+    "inputPerMillion": 1.25,
+    "outputPerMillion": 2.5
   },
   "grok-3-mini": {
-    "cacheReadPerMillion": 0.075,
-    "inputPerMillion": 0.3,
-    "outputPerMillion": 0.5
+    "cacheReadPerMillion": 0.2,
+    "inputPerMillion": 1.25,
+    "outputPerMillion": 2.5
   },
   "grok-3-mini-beta": {
-    "cacheReadPerMillion": 0.075,
-    "inputPerMillion": 0.3,
-    "outputPerMillion": 0.5
+    "cacheReadPerMillion": 0.2,
+    "inputPerMillion": 1.25,
+    "outputPerMillion": 2.5
   },
   "grok-3-mini-fast": {
-    "cacheReadPerMillion": 0.15,
-    "inputPerMillion": 0.6,
-    "outputPerMillion": 4.0
+    "cacheReadPerMillion": 0.2,
+    "inputPerMillion": 1.25,
+    "outputPerMillion": 2.5
   },
   "grok-3-mini-fast-beta": {
-    "cacheReadPerMillion": 0.15,
-    "inputPerMillion": 0.6,
-    "outputPerMillion": 4.0
+    "cacheReadPerMillion": 0.2,
+    "inputPerMillion": 1.25,
+    "outputPerMillion": 2.5
   },
   "grok-3-mini-fast-latest": {
-    "cacheReadPerMillion": 0.15,
-    "inputPerMillion": 0.6,
-    "outputPerMillion": 4.0
+    "cacheReadPerMillion": 0.2,
+    "inputPerMillion": 1.25,
+    "outputPerMillion": 2.5
   },
   "grok-3-mini-latest": {
-    "cacheReadPerMillion": 0.075,
-    "inputPerMillion": 0.3,
-    "outputPerMillion": 0.5
+    "cacheReadPerMillion": 0.2,
+    "inputPerMillion": 1.25,
+    "outputPerMillion": 2.5
   },
   "grok-4": {
-    "inputPerMillion": 3.0,
-    "outputPerMillion": 15.0
+    "cacheReadPerMillion": 0.2,
+    "inputPerMillion": 1.25,
+    "outputPerMillion": 2.5
   },
   "grok-4-0709": {
-    "inputPerMillion": 3.0,
-    "outputPerMillion": 15.0
+    "cacheReadPerMillion": 0.2,
+    "inputPerMillion": 1.25,
+    "outputPerMillion": 2.5
   },
   "grok-4-1-fast": {
-    "cacheReadPerMillion": 0.05,
-    "inputPerMillion": 0.2,
-    "outputPerMillion": 0.5
+    "cacheReadPerMillion": 0.2,
+    "inputPerMillion": 1.25,
+    "outputPerMillion": 2.5
   },
   "grok-4-1-fast-non-reasoning": {
-    "cacheReadPerMillion": 0.05,
-    "inputPerMillion": 0.2,
-    "outputPerMillion": 0.5
+    "cacheReadPerMillion": 0.2,
+    "inputPerMillion": 1.25,
+    "outputPerMillion": 2.5
   },
   "grok-4-1-fast-non-reasoning-latest": {
-    "cacheReadPerMillion": 0.05,
-    "inputPerMillion": 0.2,
-    "outputPerMillion": 0.5
+    "cacheReadPerMillion": 0.2,
+    "inputPerMillion": 1.25,
+    "outputPerMillion": 2.5
   },
   "grok-4-1-fast-reasoning": {
-    "cacheReadPerMillion": 0.05,
-    "inputPerMillion": 0.2,
-    "outputPerMillion": 0.5
+    "cacheReadPerMillion": 0.2,
+    "inputPerMillion": 1.25,
+    "outputPerMillion": 2.5
   },
   "grok-4-1-fast-reasoning-latest": {
-    "cacheReadPerMillion": 0.05,
-    "inputPerMillion": 0.2,
-    "outputPerMillion": 0.5
+    "cacheReadPerMillion": 0.2,
+    "inputPerMillion": 1.25,
+    "outputPerMillion": 2.5
   },
   "grok-4-fast-non-reasoning": {
-    "cacheReadPerMillion": 0.05,
-    "inputPerMillion": 0.2,
-    "outputPerMillion": 0.5
+    "cacheReadPerMillion": 0.2,
+    "inputPerMillion": 1.25,
+    "outputPerMillion": 2.5
   },
   "grok-4-fast-reasoning": {
-    "cacheReadPerMillion": 0.05,
-    "inputPerMillion": 0.2,
-    "outputPerMillion": 0.5
+    "cacheReadPerMillion": 0.2,
+    "inputPerMillion": 1.25,
+    "outputPerMillion": 2.5
   },
   "grok-4-latest": {
-    "inputPerMillion": 3.0,
-    "outputPerMillion": 15.0
+    "cacheReadPerMillion": 0.2,
+    "inputPerMillion": 1.25,
+    "outputPerMillion": 2.5
+  },
+  "grok-4.20": {
+    "cacheReadPerMillion": 0.2,
+    "inputPerMillion": 1.25,
+    "outputPerMillion": 2.5
   },
   "grok-4.20-0309-non-reasoning": {
     "cacheReadPerMillion": 0.2,
@@ -1064,12 +1082,42 @@
     "inputPerMillion": 1.25,
     "outputPerMillion": 2.5
   },
+  "grok-4.20-multi-agent": {
+    "cacheReadPerMillion": 0.2,
+    "inputPerMillion": 1.25,
+    "outputPerMillion": 2.5
+  },
   "grok-4.20-multi-agent-0309": {
     "cacheReadPerMillion": 0.2,
     "inputPerMillion": 1.25,
     "outputPerMillion": 2.5
   },
   "grok-4.20-multi-agent-beta-0309": {
+    "cacheReadPerMillion": 0.2,
+    "inputPerMillion": 1.25,
+    "outputPerMillion": 2.5
+  },
+  "grok-4.20-multi-agent-latest": {
+    "cacheReadPerMillion": 0.2,
+    "inputPerMillion": 1.25,
+    "outputPerMillion": 2.5
+  },
+  "grok-4.20-non-reasoning": {
+    "cacheReadPerMillion": 0.2,
+    "inputPerMillion": 1.25,
+    "outputPerMillion": 2.5
+  },
+  "grok-4.20-non-reasoning-latest": {
+    "cacheReadPerMillion": 0.2,
+    "inputPerMillion": 1.25,
+    "outputPerMillion": 2.5
+  },
+  "grok-4.20-reasoning": {
+    "cacheReadPerMillion": 0.2,
+    "inputPerMillion": 1.25,
+    "outputPerMillion": 2.5
+  },
+  "grok-4.20-reasoning-latest": {
     "cacheReadPerMillion": 0.2,
     "inputPerMillion": 1.25,
     "outputPerMillion": 2.5
@@ -1156,6 +1204,11 @@
   },
   "kimi-k2.6": {
     "cacheReadPerMillion": 0.16,
+    "inputPerMillion": 0.95,
+    "outputPerMillion": 4.0
+  },
+  "kimi-k2.7-code": {
+    "cacheReadPerMillion": 0.19,
     "inputPerMillion": 0.95,
     "outputPerMillion": 4.0
   },
