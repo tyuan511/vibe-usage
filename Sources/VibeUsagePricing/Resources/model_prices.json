@@ -70,6 +70,12 @@
     "inputPerMillion": 10.0,
     "outputPerMillion": 50.0
   },
+  "claude-fable-5-1": {
+    "cacheReadPerMillion": 0.25,
+    "cacheWritePerMillion": 12.5,
+    "inputPerMillion": 10.0,
+    "outputPerMillion": 50.0
+  },
   "claude-haiku-4-5": {
     "cacheReadPerMillion": 0.1,
     "cacheWritePerMillion": 1.25,
@@ -526,6 +532,12 @@
     "outputPerMillion": 5.0
   },
   "glm-5.1": {
+    "cacheReadPerMillion": 0.26,
+    "cacheWritePerMillion": 0,
+    "inputPerMillion": 1.4,
+    "outputPerMillion": 4.4
+  },
+  "glm-5.2": {
     "cacheReadPerMillion": 0.26,
     "cacheWritePerMillion": 0,
     "inputPerMillion": 1.4,
