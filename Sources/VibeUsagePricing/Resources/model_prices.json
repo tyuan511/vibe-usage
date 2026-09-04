@@ -390,6 +390,11 @@
     "inputPerMillion": 0.75,
     "outputPerMillion": 3.75
   },
+  "gemini-3.8-flash": {
+    "cacheReadPerMillion": 0.075,
+    "inputPerMillion": 0.75,
+    "outputPerMillion": 3.75
+  },
   "gemini-embedding-001": {
     "inputPerMillion": 0.15,
     "outputPerMillion": 0
@@ -1163,6 +1168,11 @@
     "cacheReadPerMillion": 0.2,
     "inputPerMillion": 1.0,
     "outputPerMillion": 2.0
+  },
+  "grok-build-latest": {
+    "cacheReadPerMillion": 0.3,
+    "inputPerMillion": 2.0,
+    "outputPerMillion": 6.0
   },
   "grok-code-fast": {
     "cacheReadPerMillion": 0.2,
