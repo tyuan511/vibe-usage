@@ -6,7 +6,8 @@ import VibeUsageCore
 @testable import VibeUsageUI
 import VibeUsageQuota
 
-@Suite struct MenuBarImageExporterTests {
+// Keep offscreen rendering separate from the async test's shared AppKit window state.
+@Suite(.serialized) struct MenuBarImageExporterTests {
     @MainActor
     @Test func offscreenExportUsesContentBoundsAndOpaqueBackground() throws {
         let size = CGSize(width: 160, height: 90)
@@ -134,7 +135,32 @@ import VibeUsageQuota
         let exportWithFilterOptions = renderMenuBar(availableModels: [model], displayedModel: model)
         let exportWithoutFilterOptions = renderMenuBar(availableModels: [], displayedModel: model)
 
-        #expect(exportWithFilterOptions == exportWithoutFilterOptions)
+        #expect(imagesMatch(exportWithFilterOptions, exportWithoutFilterOptions))
+    }
+
+    private func imagesMatch(_ firstData: Data?, _ secondData: Data?) -> Bool {
+        guard let first = firstData.flatMap(NSBitmapImageRep.init(data:)),
+              let second = secondData.flatMap(NSBitmapImageRep.init(data:)),
+              first.pixelsWide == second.pixelsWide,
+              first.pixelsHigh == second.pixelsHigh else {
+            return false
+        }
+
+        // SwiftUI's rounded edges can differ by one 8-bit color level between renders.
+        let tolerance: CGFloat = 1.0 / 255.0
+        for y in 0..<first.pixelsHigh {
+            for x in 0..<first.pixelsWide {
+                guard let a = first.colorAt(x: x, y: y)?.usingColorSpace(.deviceRGB),
+                      let b = second.colorAt(x: x, y: y)?.usingColorSpace(.deviceRGB),
+                      abs(a.redComponent - b.redComponent) <= tolerance,
+                      abs(a.greenComponent - b.greenComponent) <= tolerance,
+                      abs(a.blueComponent - b.blueComponent) <= tolerance,
+                      abs(a.alphaComponent - b.alphaComponent) <= tolerance else {
+                    return false
+                }
+            }
+        }
+        return true
     }
 
     private func containsPlaceholderColor(in bitmap: NSBitmapImageRep) -> Bool {

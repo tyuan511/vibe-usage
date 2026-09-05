@@ -30,28 +30,28 @@ import VibeUsageCore
     let provider = BundledPricingProvider(localSnapshotURL: nil)
     let expectedRates: [String: ModelPricingRate] = [
         "gpt-5.6": ModelPricingRate(
-            inputPerMillion: 5,
-            outputPerMillion: 30,
-            cacheWritePerMillion: 6.25,
-            cacheReadPerMillion: 0.5
+            inputPerMillion: 4,
+            outputPerMillion: 20,
+            cacheWritePerMillion: 5,
+            cacheReadPerMillion: 0.4
         ),
         "gpt-5.6-sol": ModelPricingRate(
-            inputPerMillion: 5,
-            outputPerMillion: 30,
-            cacheWritePerMillion: 6.25,
-            cacheReadPerMillion: 0.5
+            inputPerMillion: 4,
+            outputPerMillion: 20,
+            cacheWritePerMillion: 5,
+            cacheReadPerMillion: 0.4
         ),
         "gpt-5.6-terra": ModelPricingRate(
-            inputPerMillion: 2.5,
-            outputPerMillion: 15,
-            cacheWritePerMillion: 3.125,
-            cacheReadPerMillion: 0.25
+            inputPerMillion: 2,
+            outputPerMillion: 12,
+            cacheWritePerMillion: 2.5,
+            cacheReadPerMillion: 0.2
         ),
         "gpt-5.6-luna": ModelPricingRate(
-            inputPerMillion: 1,
-            outputPerMillion: 6,
-            cacheWritePerMillion: 1.25,
-            cacheReadPerMillion: 0.1
+            inputPerMillion: 0.2,
+            outputPerMillion: 1.2,
+            cacheWritePerMillion: 0.25,
+            cacheReadPerMillion: 0.02
         ),
     ]
 
