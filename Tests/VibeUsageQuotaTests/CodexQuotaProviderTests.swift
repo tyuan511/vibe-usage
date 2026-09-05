@@ -20,8 +20,11 @@ import Testing
         #expect(windows.count == 2)
         let primary = try #require(windows.first { $0.id == "primary_window" })
         #expect(primary.usedPercentText == "45%")
+        #expect(abs(primary.remainingFraction - 0.55) < 0.0001)
+        #expect(primary.remainingPercentText == "55%")
         let secondary = try #require(windows.first { $0.id == "secondary_window" })
         #expect(secondary.usedPercentText == "88%")
+        #expect(secondary.remainingPercentText == "12%")
     }
 
     @Test func missingRateLimitObjectProducesNoWindows() throws {

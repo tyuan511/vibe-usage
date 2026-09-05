@@ -20,10 +20,13 @@ import Testing
         let fiveHour = try #require(windows.first { $0.id == "five_hour" })
         #expect(fiveHour.usedPercentText == "60%")
         #expect(abs(fiveHour.usedFraction - 0.60) < 0.0001)
+        #expect(abs(fiveHour.remainingFraction - 0.40) < 0.0001)
+        #expect(fiveHour.remainingPercentText == "40%")
         #expect(fiveHour.resetsAt != nil)
 
         let sevenDay = try #require(windows.first { $0.id == "seven_day" })
         #expect(sevenDay.usedPercentText == "31%")
+        #expect(sevenDay.remainingPercentText == "69%")
     }
 
     @Test func parsesUsedAndLimitRatioStyleWindows() throws {
@@ -56,6 +59,8 @@ import Testing
         #expect(windows[0].id == "five_hour")
         #expect(windows[0].usedFraction == 1.0)
         #expect(windows[0].usedPercentText == "100%")
+        #expect(windows[0].remainingFraction == 0)
+        #expect(windows[0].remainingPercentText == "0%")
     }
 
     @Test func windowsWithoutRecognizableUsageFieldsAreSkipped() throws {

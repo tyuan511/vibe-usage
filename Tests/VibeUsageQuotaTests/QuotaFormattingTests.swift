@@ -15,6 +15,18 @@ import Testing
         #expect(QuotaFormatting.percentText(usedFraction: -0.2) == "0%")
     }
 
+    @Test func remainingPercentTextConvertsBeforeRounding() {
+        #expect(QuotaFormatting.remainingPercentText(usedFraction: 0.874) == "13%")
+        #expect(QuotaFormatting.remainingPercentText(usedFraction: 0.876) == "12%")
+        #expect(QuotaFormatting.remainingPercentText(usedFraction: 0) == "100%")
+        #expect(QuotaFormatting.remainingPercentText(usedFraction: 1) == "0%")
+    }
+
+    @Test func remainingPercentTextClampsOutOfRangeFractions() {
+        #expect(QuotaFormatting.remainingPercentText(usedFraction: 1.5) == "0%")
+        #expect(QuotaFormatting.remainingPercentText(usedFraction: -0.2) == "100%")
+    }
+
     @Test func countdownTextReturnsNilForPastOrNilDates() {
         let now = Date(timeIntervalSince1970: 1_800_000_000)
         #expect(QuotaFormatting.countdownText(resetsAt: nil, now: now) == nil)

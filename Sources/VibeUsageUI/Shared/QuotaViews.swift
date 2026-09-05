@@ -171,8 +171,8 @@ struct SubscriptionTierBadge: View {
     }
 }
 
-/// A single window's thin progress bar with trailing "87% · 3h12m" text,
-/// tinted by utilization (green < 70%, amber 70-90%, red > 90%).
+/// A single window's remaining quota bar with trailing "87% remaining" text
+/// and a reset countdown. Warns at <= 30% remaining (amber) and <= 10% (red).
 struct QuotaWindowBar: View {
     let window: QuotaWindow
     @Environment(\.menuBarExportMode) private var isExporting
@@ -186,10 +186,11 @@ struct QuotaWindowBar: View {
     }
 
     private var trailingText: String {
+        let remaining = QuotaUIStrings.remaining(window.remainingPercentText)
         if let countdown = window.resetCountdownText {
-            return "\(window.usedPercentText) · \(countdown)"
+            return "\(remaining) · \(countdown)"
         }
-        return window.usedPercentText
+        return remaining
     }
 
     var body: some View {
@@ -221,19 +222,19 @@ struct QuotaWindowBar: View {
                         .fill(Color.secondary.opacity(0.16))
                     Capsule()
                         .fill(tint)
-                        .frame(width: proxy.size.width * CGFloat(window.usedFraction))
+                        .frame(width: proxy.size.width * CGFloat(window.remainingFraction))
                 }
             }
             .frame(height: 4)
         } else {
-            ProgressView(value: window.usedFraction)
+            ProgressView(value: window.remainingFraction)
                 .progressViewStyle(.linear)
                 .tint(tint)
         }
     }
 }
 
-/// Bilingual strings for non-ok quota states, kept alongside the view since
+/// Bilingual strings for quota display, kept alongside the view since
 /// they're only ever used here.
 enum QuotaUIStrings {
     static let sectionTitle = UIStrings.text(zh: "限额", en: "Limits")
@@ -249,6 +250,10 @@ enum QuotaUIStrings {
     static let disabled = UIStrings.text(zh: "已关闭", en: "Disabled")
     static let disconnect = UIStrings.text(zh: "断开连接", en: "Disconnect")
     static let waitingForBrowser = UIStrings.text(zh: "等待浏览器授权…", en: "Waiting for browser authorization…")
+
+    static func remaining(_ percent: String) -> String {
+        UIStrings.text(zh: "剩余 \(percent)", en: "\(percent) remaining")
+    }
 
     static func connectLabel(for sourceID: AgentSourceID) -> String {
         switch sourceID {

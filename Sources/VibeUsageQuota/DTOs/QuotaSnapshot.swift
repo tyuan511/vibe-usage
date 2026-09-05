@@ -14,6 +14,13 @@ public struct QuotaWindow: Sendable, Equatable, Identifiable {
     public let resetsAt: Date?
     public let resetCountdownText: String?
 
+    /// Fraction of the window's quota still available, clamped to `0...1`.
+    public var remainingFraction: Double { 1 - usedFraction }
+
+    public var remainingPercentText: String {
+        QuotaFormatting.remainingPercentText(usedFraction: usedFraction)
+    }
+
     public init(
         id: String,
         label: String,

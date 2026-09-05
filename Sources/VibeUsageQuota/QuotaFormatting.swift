@@ -12,6 +12,11 @@ public enum QuotaFormatting {
         return "\(percent)%"
     }
 
+    /// Integer percent of quota still available, e.g. 60% used becomes "40%".
+    public static func remainingPercentText(usedFraction: Double) -> String {
+        percentText(usedFraction: 1 - min(max(usedFraction, 0), 1))
+    }
+
     /// Relative countdown text to `resetsAt` from `now`, e.g. zh "3小时12分后重置"
     /// / en "resets in 3h 12m". Returns nil once the reset time has passed
     /// (the caller's next fetch is expected to supersede it).
