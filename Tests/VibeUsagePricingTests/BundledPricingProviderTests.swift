@@ -60,6 +60,19 @@ import VibeUsageCore
     }
 }
 
+@Test func loadsGPT6AstraWithStandardPricing() {
+    let provider = BundledPricingProvider(localSnapshotURL: nil)
+    let expected = ModelPricingRate(
+        inputPerMillion: 10,
+        outputPerMillion: 50,
+        cacheWritePerMillion: 12.5,
+        cacheReadPerMillion: 1
+    )
+    for model in ["gpt-6-astra", "openai/gpt-6-astra"] {
+        #expect(provider.rate(forModelFamily: model) == expected)
+    }
+}
+
 @Test func resolvesStoredAliasesForHistoricalRepricing() throws {
     let provider = BundledPricingProvider(localSnapshotURL: nil)
     #expect(

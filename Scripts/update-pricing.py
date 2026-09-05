@@ -37,12 +37,13 @@ def is_relevant(key: str, entry: dict) -> bool:
     provider = entry.get("litellm_provider", "")
     kl = key.lower()
     bare = bare_key(kl)
+    # Keep GPT-4 and newer generations without including image/realtime models.
+    gpt_generation = re.match(r"gpt-(\d+)", bare)
 
     if provider == "anthropic" and "claude" in kl:
         return True
     if provider == "openai" and (
-        bare.startswith("gpt-5")
-        or bare.startswith("gpt-4")
+        (gpt_generation is not None and int(gpt_generation.group(1)) >= 4)
         or bare.startswith("o1")
         or bare.startswith("o3")
         or bare.startswith("o4")

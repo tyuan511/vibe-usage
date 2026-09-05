@@ -969,6 +969,12 @@
     "inputPerMillion": 2.0,
     "outputPerMillion": 12.0
   },
+  "gpt-6-astra": {
+    "cacheReadPerMillion": 1.0,
+    "cacheWritePerMillion": 12.5,
+    "inputPerMillion": 10.0,
+    "outputPerMillion": 50.0
+  },
   "grok-3": {
     "cacheReadPerMillion": 0.2,
     "inputPerMillion": 1.25,

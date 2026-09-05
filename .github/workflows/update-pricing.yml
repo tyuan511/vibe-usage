@@ -21,7 +21,9 @@ jobs:
         uses: actions/checkout@v5
 
       - name: Refresh pricing snapshot
-        run: python3 Scripts/update-pricing.py
+        run: |
+          python3 -m unittest discover -s Scripts/tests
+          python3 Scripts/update-pricing.py
 
       - name: Commit updated pricing
         run: |

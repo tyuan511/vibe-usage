@@ -1,6 +1,7 @@
 .PHONY: test build app dmg preview restart pricing ci
 
 test:
+	python3 -m unittest discover -s Scripts/tests
 	swift test
 
 build:

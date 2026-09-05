@@ -24,7 +24,7 @@ jobs:
           echo "BUILD_NUMBER=${GITHUB_RUN_NUMBER}" >> "$GITHUB_ENV"
 
       - name: Test
-        run: swift test
+        run: make test
 
       - name: Build DMG
         env:
