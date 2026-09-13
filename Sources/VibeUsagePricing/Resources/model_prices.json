@@ -180,6 +180,12 @@
     "inputPerMillion": 0.14,
     "outputPerMillion": 0.28
   },
+  "deepseek-flash": {
+    "cacheReadPerMillion": 0.006,
+    "cacheWritePerMillion": 0.0,
+    "inputPerMillion": 0.3,
+    "outputPerMillion": 1.2
+  },
   "deepseek-r1": {
     "inputPerMillion": 0.55,
     "outputPerMillion": 2.19
@@ -200,16 +206,16 @@
     "outputPerMillion": 0.4
   },
   "deepseek-v4-flash": {
-    "cacheReadPerMillion": 0.014,
+    "cacheReadPerMillion": 0.006,
     "cacheWritePerMillion": 0.0,
-    "inputPerMillion": 0.44,
-    "outputPerMillion": 1.32
+    "inputPerMillion": 0.3,
+    "outputPerMillion": 1.2
   },
   "deepseek-v4-flash-vision-exp": {
-    "cacheReadPerMillion": 0.014,
+    "cacheReadPerMillion": 0.006,
     "cacheWritePerMillion": 0.0,
-    "inputPerMillion": 0.44,
-    "outputPerMillion": 1.32
+    "inputPerMillion": 0.3,
+    "outputPerMillion": 1.2
   },
   "deepseek-v4-pro": {
     "cacheReadPerMillion": 0.044,
@@ -916,12 +922,10 @@
     "outputPerMillion": 1.25
   },
   "gpt-5.4-pro": {
-    "cacheReadPerMillion": 3.0,
     "inputPerMillion": 30.0,
     "outputPerMillion": 180.0
   },
   "gpt-5.4-pro-2026-03-05": {
-    "cacheReadPerMillion": 3.0,
     "inputPerMillion": 30.0,
     "outputPerMillion": 180.0
   },
@@ -936,12 +940,10 @@
     "outputPerMillion": 30.0
   },
   "gpt-5.5-pro": {
-    "cacheReadPerMillion": 3.0,
     "inputPerMillion": 30.0,
     "outputPerMillion": 180.0
   },
   "gpt-5.5-pro-2026-04-23": {
-    "cacheReadPerMillion": 3.0,
     "inputPerMillion": 30.0,
     "outputPerMillion": 180.0
   },
@@ -1428,16 +1430,16 @@
     "outputPerMillion": 1.0
   },
   "qwen3-14b": {
-    "inputPerMillion": 0.12,
-    "outputPerMillion": 0.24
+    "inputPerMillion": 0.2275,
+    "outputPerMillion": 0.91
   },
   "qwen3-235b-a22b": {
     "inputPerMillion": 0.455,
     "outputPerMillion": 1.82
   },
   "qwen3-235b-a22b-2507": {
-    "inputPerMillion": 0.0875,
-    "outputPerMillion": 0.35
+    "inputPerMillion": 0.22,
+    "outputPerMillion": 0.88
   },
   "qwen3-235b-a22b-thinking-2507": {
     "inputPerMillion": 0.23,
@@ -1448,8 +1450,8 @@
     "outputPerMillion": 0.5
   },
   "qwen3-30b-a3b-instruct-2507": {
-    "inputPerMillion": 0.04815,
-    "outputPerMillion": 0.19305
+    "inputPerMillion": 0.09,
+    "outputPerMillion": 0.3
   },
   "qwen3-30b-a3b-thinking-2507": {
     "inputPerMillion": 0.2,
@@ -1537,15 +1539,16 @@
     "outputPerMillion": 2.1
   },
   "qwen3.5-122b-a10b": {
-    "inputPerMillion": 0.29,
-    "outputPerMillion": 2.4
+    "inputPerMillion": 0.26,
+    "outputPerMillion": 2.08
   },
   "qwen3.5-27b": {
     "inputPerMillion": 0.195,
     "outputPerMillion": 1.56
   },
   "qwen3.5-35b-a3b": {
-    "inputPerMillion": 0.25,
+    "cacheReadPerMillion": 0.15625,
+    "inputPerMillion": 0.3125,
     "outputPerMillion": 1.25
   },
   "qwen3.5-397b-a17b": {
@@ -1628,6 +1631,12 @@
   },
   "qwen3.8-max": {
     "cacheReadPerMillion": 0.25,
+    "inputPerMillion": 2.0,
+    "outputPerMillion": 6.0
+  },
+  "qwen3.8-max-0902": {
+    "cacheReadPerMillion": 0.25,
+    "cacheWritePerMillion": 2.5,
     "inputPerMillion": 2.0,
     "outputPerMillion": 6.0
   }
