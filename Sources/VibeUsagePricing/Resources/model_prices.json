@@ -229,8 +229,8 @@
   },
   "gemini-2.0-flash": {
     "cacheReadPerMillion": 0.025,
-    "inputPerMillion": 0.1,
-    "outputPerMillion": 0.4
+    "inputPerMillion": 0.15,
+    "outputPerMillion": 0.6
   },
   "gemini-2.0-flash-001": {
     "cacheReadPerMillion": 0.0375,
@@ -317,6 +317,7 @@
     "outputPerMillion": 3.0
   },
   "gemini-3-pro-image": {
+    "cacheReadPerMillion": 0.2,
     "inputPerMillion": 2.0,
     "outputPerMillion": 12.0
   },
@@ -330,6 +331,7 @@
     "outputPerMillion": 12.0
   },
   "gemini-3.1-flash-image": {
+    "cacheReadPerMillion": 0.05,
     "inputPerMillion": 0.5,
     "outputPerMillion": 3.0
   },
@@ -716,15 +718,15 @@
     "outputPerMillion": 5.0
   },
   "gpt-4o-mini-tts": {
-    "inputPerMillion": 2.5,
+    "inputPerMillion": 0.6,
     "outputPerMillion": 10.0
   },
   "gpt-4o-mini-tts-2025-03-20": {
-    "inputPerMillion": 2.5,
+    "inputPerMillion": 0.6,
     "outputPerMillion": 10.0
   },
   "gpt-4o-mini-tts-2025-12-15": {
-    "inputPerMillion": 2.5,
+    "inputPerMillion": 0.6,
     "outputPerMillion": 10.0
   },
   "gpt-4o-realtime-preview": {
@@ -938,6 +940,11 @@
     "cacheReadPerMillion": 0.5,
     "inputPerMillion": 5.0,
     "outputPerMillion": 30.0
+  },
+  "gpt-5.5-cyber": {
+    "cacheReadPerMillion": 1.25,
+    "inputPerMillion": 12.5,
+    "outputPerMillion": 75.0
   },
   "gpt-5.5-pro": {
     "inputPerMillion": 30.0,
