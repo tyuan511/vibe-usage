@@ -1675,5 +1675,10 @@
     "cacheWritePerMillion": 2.5,
     "inputPerMillion": 2.0,
     "outputPerMillion": 6.0
+  },
+  "qwen3.8-omni-flash": {
+    "cacheReadPerMillion": 0.016,
+    "inputPerMillion": 0.15,
+    "outputPerMillion": 0.47
   }
 }
