@@ -177,6 +177,7 @@
     "outputPerMillion": 0.42
   },
   "deepseek-coder": {
+    "cacheReadPerMillion": 0.014,
     "inputPerMillion": 0.14,
     "outputPerMillion": 0.28
   },
@@ -187,6 +188,7 @@
     "outputPerMillion": 1.2
   },
   "deepseek-r1": {
+    "cacheReadPerMillion": 0.14,
     "inputPerMillion": 0.55,
     "outputPerMillion": 2.19
   },
@@ -202,6 +204,7 @@
     "outputPerMillion": 1.1
   },
   "deepseek-v3.2": {
+    "cacheReadPerMillion": 0.028,
     "inputPerMillion": 0.28,
     "outputPerMillion": 0.4
   },
@@ -1108,6 +1111,11 @@
     "inputPerMillion": 1.25,
     "outputPerMillion": 2.5
   },
+  "grok-4.20-0309": {
+    "cacheReadPerMillion": 0.2,
+    "inputPerMillion": 1.25,
+    "outputPerMillion": 2.5
+  },
   "grok-4.20-0309-non-reasoning": {
     "cacheReadPerMillion": 0.2,
     "inputPerMillion": 1.25,
@@ -1118,12 +1126,77 @@
     "inputPerMillion": 1.25,
     "outputPerMillion": 2.5
   },
+  "grok-4.20-beta": {
+    "cacheReadPerMillion": 0.2,
+    "inputPerMillion": 1.25,
+    "outputPerMillion": 2.5
+  },
+  "grok-4.20-beta-0309": {
+    "cacheReadPerMillion": 0.2,
+    "inputPerMillion": 1.25,
+    "outputPerMillion": 2.5
+  },
   "grok-4.20-beta-0309-non-reasoning": {
     "cacheReadPerMillion": 0.2,
     "inputPerMillion": 1.25,
     "outputPerMillion": 2.5
   },
   "grok-4.20-beta-0309-reasoning": {
+    "cacheReadPerMillion": 0.2,
+    "inputPerMillion": 1.25,
+    "outputPerMillion": 2.5
+  },
+  "grok-4.20-beta-latest": {
+    "cacheReadPerMillion": 0.2,
+    "inputPerMillion": 1.25,
+    "outputPerMillion": 2.5
+  },
+  "grok-4.20-beta-latest-non-reasoning": {
+    "cacheReadPerMillion": 0.2,
+    "inputPerMillion": 1.25,
+    "outputPerMillion": 2.5
+  },
+  "grok-4.20-beta-latest-reasoning": {
+    "cacheReadPerMillion": 0.2,
+    "inputPerMillion": 1.25,
+    "outputPerMillion": 2.5
+  },
+  "grok-4.20-beta-non-reasoning": {
+    "cacheReadPerMillion": 0.2,
+    "inputPerMillion": 1.25,
+    "outputPerMillion": 2.5
+  },
+  "grok-4.20-beta-reasoning": {
+    "cacheReadPerMillion": 0.2,
+    "inputPerMillion": 1.25,
+    "outputPerMillion": 2.5
+  },
+  "grok-4.20-experimental-beta-0304": {
+    "cacheReadPerMillion": 0.2,
+    "inputPerMillion": 1.25,
+    "outputPerMillion": 2.5
+  },
+  "grok-4.20-experimental-beta-0304-non-reasoning": {
+    "cacheReadPerMillion": 0.2,
+    "inputPerMillion": 1.25,
+    "outputPerMillion": 2.5
+  },
+  "grok-4.20-experimental-beta-0304-reasoning": {
+    "cacheReadPerMillion": 0.2,
+    "inputPerMillion": 1.25,
+    "outputPerMillion": 2.5
+  },
+  "grok-4.20-experimental-beta-latest": {
+    "cacheReadPerMillion": 0.2,
+    "inputPerMillion": 1.25,
+    "outputPerMillion": 2.5
+  },
+  "grok-4.20-experimental-beta-non-reasoning-latest": {
+    "cacheReadPerMillion": 0.2,
+    "inputPerMillion": 1.25,
+    "outputPerMillion": 2.5
+  },
+  "grok-4.20-experimental-beta-reasoning-latest": {
     "cacheReadPerMillion": 0.2,
     "inputPerMillion": 1.25,
     "outputPerMillion": 2.5
@@ -1143,6 +1216,21 @@
     "inputPerMillion": 1.25,
     "outputPerMillion": 2.5
   },
+  "grok-4.20-multi-agent-beta-latest": {
+    "cacheReadPerMillion": 0.2,
+    "inputPerMillion": 1.25,
+    "outputPerMillion": 2.5
+  },
+  "grok-4.20-multi-agent-experimental-beta-0304": {
+    "cacheReadPerMillion": 0.2,
+    "inputPerMillion": 1.25,
+    "outputPerMillion": 2.5
+  },
+  "grok-4.20-multi-agent-experimental-beta-latest": {
+    "cacheReadPerMillion": 0.2,
+    "inputPerMillion": 1.25,
+    "outputPerMillion": 2.5
+  },
   "grok-4.20-multi-agent-latest": {
     "cacheReadPerMillion": 0.2,
     "inputPerMillion": 1.25,
@@ -1153,12 +1241,22 @@
     "inputPerMillion": 1.25,
     "outputPerMillion": 2.5
   },
+  "grok-4.20-non-reasoning-gv2": {
+    "cacheReadPerMillion": 0.2,
+    "inputPerMillion": 1.25,
+    "outputPerMillion": 2.5
+  },
   "grok-4.20-non-reasoning-latest": {
     "cacheReadPerMillion": 0.2,
     "inputPerMillion": 1.25,
     "outputPerMillion": 2.5
   },
   "grok-4.20-reasoning": {
+    "cacheReadPerMillion": 0.2,
+    "inputPerMillion": 1.25,
+    "outputPerMillion": 2.5
+  },
+  "grok-4.20-reasoning-gv2": {
     "cacheReadPerMillion": 0.2,
     "inputPerMillion": 1.25,
     "outputPerMillion": 2.5
@@ -1189,6 +1287,11 @@
     "outputPerMillion": 6.0
   },
   "grok-4.6": {
+    "cacheReadPerMillion": 0.5,
+    "inputPerMillion": 2.0,
+    "outputPerMillion": 6.0
+  },
+  "grok-4.7": {
     "cacheReadPerMillion": 0.5,
     "inputPerMillion": 2.0,
     "outputPerMillion": 6.0
@@ -1651,9 +1754,9 @@
     "outputPerMillion": 6.0
   },
   "qwen3.8-27b": {
-    "cacheReadPerMillion": 0.05,
-    "inputPerMillion": 0.2,
-    "outputPerMillion": 2.5
+    "cacheReadPerMillion": 0.085,
+    "inputPerMillion": 0.42,
+    "outputPerMillion": 3.0
   },
   "qwen3.8-27b:free": {
     "inputPerMillion": 0.0,
