@@ -125,6 +125,7 @@ let package = Package(
             ],
             resources: [
                 .copy("Resources/logo.png"),
+                .copy("Resources/menu-bar-logo.png"),
                 .copy("Resources/AgentIcons")
             ]
         ),

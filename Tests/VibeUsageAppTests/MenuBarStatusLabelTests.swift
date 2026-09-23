@@ -22,6 +22,13 @@ final class MenuBarStatusLabelTests: XCTestCase {
         XCTAssertNotEqual(baseline, changedSpend)
     }
 
+    func testLogoImageFitsInStatusBar() {
+        // MenuBarExtra ignores SwiftUI frames, so the NSImage size is what gets drawn.
+        let image = VibeUsageBranding.menuBarImage
+
+        XCTAssertLessThanOrEqual(image.size.height, NSStatusBar.system.thickness)
+    }
+
     private func fittingSize(metrics: MenuBarMetricValues?) -> CGSize {
         let view = MenuBarStatusLabel(metrics: metrics)
             .labelStyle(.iconOnly)

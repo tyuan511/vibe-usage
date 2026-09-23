@@ -96,17 +96,33 @@ struct MenuBarStatusLabel: View {
             Image(nsImage: MenuBarStatusImageRenderer.image(for: metrics))
                 .accessibilityLabel("\(metrics.spend), \(metrics.tokens)")
         } else {
-            Image(systemName: "chart.bar.xaxis")
+            Image(nsImage: VibeUsageBranding.menuBarImage)
         }
     }
 }
 
+/// MenuBarExtra flattens its label to a single image and title, so the
+/// two-line layout is pre-rendered. The colored logo rules out a template
+/// image; instead the text color follows the menu bar appearance at draw time.
 enum MenuBarStatusImageRenderer {
     @MainActor
     static func image(for metrics: MenuBarMetricValues) -> NSImage {
+        let light = render(metrics, textColor: .black)
+        let dark = render(metrics, textColor: .white)
+        return NSImage(size: light.size, flipped: false) { rect in
+            let appearance = NSAppearance.currentDrawing().bestMatch(from: [.aqua, .darkAqua])
+            (appearance == .darkAqua ? dark : light).draw(in: rect)
+            return true
+        }
+    }
+
+    @MainActor
+    private static func render(_ metrics: MenuBarMetricValues, textColor: Color) -> NSImage {
+        let logoSize = VibeUsageBranding.menuBarImageSize
         let content = HStack(spacing: 5) {
-            Image(systemName: "chart.bar.xaxis")
-                .font(.system(size: 13, weight: .medium))
+            Image(nsImage: VibeUsageBranding.menuBarImage)
+                .resizable()
+                .frame(width: logoSize, height: logoSize)
             VStack(alignment: .trailing, spacing: 0) {
                 Text(metrics.spend)
                 Text(metrics.tokens)
@@ -115,14 +131,12 @@ enum MenuBarStatusImageRenderer {
             .lineLimit(1)
             .fixedSize(horizontal: true, vertical: true)
         }
-        .foregroundStyle(.black)
+        .foregroundStyle(textColor)
         .fixedSize()
 
         let renderer = ImageRenderer(content: content)
         renderer.scale = 2
-        let image = renderer.nsImage ?? NSImage()
-        image.isTemplate = true
-        return image
+        return renderer.nsImage ?? NSImage()
     }
 }
 

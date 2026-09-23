@@ -162,3 +162,21 @@ struct VibeUsageLogo: View {
         return image
     }
 }
+
+public enum VibeUsageBranding {
+    /// Point size of the menu bar logo. MenuBarExtra labels ignore SwiftUI
+    /// `.frame`/`.resizable`, so the NSImage itself must carry this size.
+    public static let menuBarImageSize: CGFloat = 20
+
+    public static var menuBarImage: NSImage {
+        guard let url = VibeUsageUIResources.bundle.url(
+            forResource: "menu-bar-logo",
+            withExtension: "png"
+        ), let image = NSImage(contentsOf: url) else {
+            return NSImage()
+        }
+        image.size = NSSize(width: menuBarImageSize, height: menuBarImageSize)
+        image.isTemplate = false
+        return image
+    }
+}
