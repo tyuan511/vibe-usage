@@ -59,6 +59,31 @@ class UpdatePricingTests(unittest.TestCase):
                 }
             })
 
+    def test_refresh_keeps_models_upstream_no_longer_lists(self):
+        payload = {
+            "claude-sonnet-5": {
+                "litellm_provider": "anthropic",
+                "input_cost_per_token": 0.000004,
+                "output_cost_per_token": 0.00002,
+            },
+        }
+        existing = {
+            "claude-sonnet-4": {"inputPerMillion": 3, "outputPerMillion": 15},
+            "claude-sonnet-5": {"inputPerMillion": 1, "outputPerMillion": 1},
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            destination = Path(directory) / "model_prices.json"
+            destination.write_text(json.dumps(existing))
+            response = io.BytesIO(json.dumps(payload).encode())
+            with patch.object(update_pricing.urllib.request, "urlopen", return_value=response), \
+                 patch.object(update_pricing, "DEST", destination), \
+                 redirect_stderr(io.StringIO()):
+                update_pricing.main()
+            self.assertEqual(json.loads(destination.read_text()), {
+                "claude-sonnet-4": {"inputPerMillion": 3, "outputPerMillion": 15},
+                "claude-sonnet-5": {"inputPerMillion": 4, "outputPerMillion": 20},
+            })
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -16,6 +16,12 @@ import VibeUsageCore
     #expect(provider.rate(forModelFamily: "gemini-3-flash-preview") != nil)
     #expect(provider.rate(forModelFamily: "qwen3-coder-plus") != nil)
     #expect(provider.rate(forModelFamily: "kimi-k2") != nil)
+    #expect(provider.rate(forModelFamily: "claude-opus-5-5") != nil)
+}
+
+@Test func loadsNewClaudeFamilyFromBundledSnapshot() {
+    let provider = BundledPricingProvider(localSnapshotURL: nil)
+    #expect(provider.rate(forModelFamily: "claude-opus-5-5") != nil)
 }
 
 @Test func loadsCommonDirectProviderFamiliesFromBundledSnapshot() {

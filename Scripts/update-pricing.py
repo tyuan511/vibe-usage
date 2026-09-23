@@ -8,6 +8,10 @@ Keeps pricing entries for the model families VibeUsage adapters resolve to:
 Anthropic Claude, OpenAI/Codex, Google Gemini, Alibaba Qwen, Moonshot Kimi,
 GitHub Copilot, DeepSeek, and xAI Grok. Extend `is_relevant` when adding a
 new agent whose logs report a distinct model family.
+
+The refresh merges into the existing snapshot rather than replacing it: LiteLLM
+drops retired models, but local usage history still references them, and the
+app downloads this file to price that history.
 """
 import json
 import re
@@ -73,6 +77,12 @@ def is_relevant(key: str, entry: dict) -> bool:
     return False
 
 
+def load_existing() -> dict[str, dict[str, float]]:
+    if not DEST.exists():
+        return {}
+    return json.loads(DEST.read_text())
+
+
 def main() -> None:
     with urllib.request.urlopen(SOURCE_URL) as resp:
         data = json.load(resp)
@@ -105,8 +115,16 @@ def main() -> None:
         if alias not in out and canonical in out:
             out[alias] = out[canonical]
 
+    # Upstream prices win for models it still lists; retired ones keep their
+    # last known price.
+    retained = {key: rate for key, rate in load_existing().items() if key not in out}
+    out.update(retained)
+
     DEST.write_text(json.dumps(out, indent=2, sort_keys=True) + "\n")
-    print(f"Wrote {len(out)} model families to {DEST}", file=sys.stderr)
+    print(
+        f"Wrote {len(out)} model families to {DEST} ({len(retained)} retained from the previous snapshot)",
+        file=sys.stderr,
+    )
 
 
 if __name__ == "__main__":
