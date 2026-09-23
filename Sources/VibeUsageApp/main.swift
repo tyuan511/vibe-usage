@@ -769,4 +769,5 @@ final class AppViewModel: ObservableObject {
     }
 }
 
+LegacyDefaultsMigration.run()
 VibeUsageApp.main()

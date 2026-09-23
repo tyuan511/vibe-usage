@@ -74,10 +74,28 @@ Never commit the exported private key. Losing this key strands ad-hoc-signed
 installations because there is no Developer ID signature available for key
 rotation.
 
-Release builds accept an optional signing identity:
+Release builds use bundle identifier `vibeusage.fastvibe.dev` and accept a
+Developer ID signing identity:
 
 ```bash
-SIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)" Scripts/build-app.sh release
+SIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)" \
+  Scripts/build-app.sh release
 ```
 
-In GitHub Actions, set repository secret `SIGN_IDENTITY` to enable signed release DMGs.
+The signing script signs Sparkle from the inside out, enables the hardened
+runtime, and adds a secure timestamp. To package and notarize locally, provide
+an App Store Connect API key (`APPLE_API_KEY`, `APPLE_API_KEY_ID`, and
+`APPLE_API_ISSUER`):
+
+```bash
+SIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)" \
+  APPLE_API_KEY=/path/to/AuthKey_ABC123.p8 \
+  APPLE_API_KEY_ID=ABC123 APPLE_API_ISSUER=... \
+  Scripts/package-dmg.sh release
+```
+
+With no identity, local builds remain ad-hoc signed. In GitHub Actions, set
+`SIGN_IDENTITY`, `APPLE_CERT_P12`, `APPLE_CERT_PASSWORD`, `APPLE_API_KEY_P8`,
+`APPLE_API_KEY_ID`, and `APPLE_API_ISSUER` to produce a signed and notarized
+release. `APPLE_CERT_P12` and `APPLE_API_KEY_P8` should contain base64-encoded
+files.

@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 # Builds the VibeUsageApp executable via SwiftPM and assembles it into a
-# double-clickable VibeUsage.app bundle. Ad-hoc signed for local use.
+# double-clickable VibeUsage.app bundle.
+#
+# Signed ad-hoc by default (local use). Pass a real Developer ID identity to
+# produce a bundle that can be notarized and shipped:
+#
+#   SIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)" Scripts/build-app.sh release
 #
 # Usage: Scripts/build-app.sh [debug|release]
 set -euo pipefail
@@ -24,7 +29,13 @@ SIGN_IDENTITY="${SIGN_IDENTITY:--}"
 
 echo "==> swift build -c ${CONFIG}"
 swift build -c "${CONFIG}"
+# SwiftPM's output directory is toolchain-dependent (for example
+# .build/out/Products/Debug on newer SwiftPM). Never assume .build/debug:
+# copying from that stale legacy path can silently package old resources,
+# including an old model_prices.json.
+BUILD_DIR="$(swift build -c "${CONFIG}" --show-bin-path)"
 
+echo "==> Using build products from ${BUILD_DIR}"
 echo "==> Assembling ${APP_BUNDLE}"
 rm -rf "${APP_BUNDLE}"
 mkdir -p "${APP_BUNDLE}/Contents/MacOS"
@@ -85,11 +96,38 @@ fi
 
 if [ "${SIGN_IDENTITY}" = "-" ]; then
     echo "==> codesign (ad-hoc)"
+    codesign --force --deep --sign - "${APP_BUNDLE}"
+    codesign --verify --deep --strict "${APP_BUNDLE}"
 else
+    # Fail with the list of usable identities rather than codesign's bare
+    # "no identity found", which does not say which keychain was searched.
+    if ! security find-identity -v -p codesigning | grep -Fq "${SIGN_IDENTITY}"; then
+        echo "error: signing identity '${SIGN_IDENTITY}' is not in the keychain" >&2
+        echo "       identities available for code signing:" >&2
+        security find-identity -v -p codesigning >&2 || true
+        exit 1
+    fi
+
     echo "==> codesign (${SIGN_IDENTITY})"
+    # Sign inside-out: every nested Sparkle item first, the app bundle last.
+    # `--deep` is deprecated for *signing* and silently drops the hardened
+    # runtime from nested code, which fails notarization and can leave Sparkle's
+    # Updater.app unable to relaunch the app. Each nested item therefore gets
+    # the runtime flag and a secure timestamp explicitly.
+    SPARKLE_B="${APP_BUNDLE}/Contents/Frameworks/Sparkle.framework/Versions/B"
+    for nested in \
+        "${SPARKLE_B}/XPCServices/Downloader.xpc" \
+        "${SPARKLE_B}/XPCServices/Installer.xpc" \
+        "${SPARKLE_B}/Updater.app" \
+        "${SPARKLE_B}/Autoupdate" \
+        "${APP_BUNDLE}/Contents/Frameworks/Sparkle.framework"; do
+        [ -e "${nested}" ] || continue
+        echo "    + ${nested#${APP_BUNDLE}/Contents/Frameworks/}"
+        codesign --force --options runtime --timestamp --sign "${SIGN_IDENTITY}" "${nested}"
+    done
+    codesign --force --options runtime --timestamp --sign "${SIGN_IDENTITY}" "${APP_BUNDLE}"
+    codesign --verify --deep --strict --verbose=2 "${APP_BUNDLE}"
 fi
-codesign --force --deep --sign "${SIGN_IDENTITY}" "${APP_BUNDLE}"
-codesign --verify --deep --strict "${APP_BUNDLE}"
 
 echo "==> Built ${APP_BUNDLE}"
 echo "    Run with: open ${APP_BUNDLE}"

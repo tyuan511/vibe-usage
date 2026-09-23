@@ -13,6 +13,13 @@ jobs:
     name: Build DMG and publish GitHub Release
     runs-on: macos-26
 
+    # GitHub does not expose the `secrets` context to `if:`, so the "are the
+    # signing credentials configured?" gates are read through `env`, which `if:`
+    # does see.
+    env:
+      APPLE_CERT_P12: ${{ secrets.APPLE_CERT_P12 }}
+      APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -23,13 +30,89 @@ jobs:
           echo "VERSION=${VERSION}" >> "$GITHUB_ENV"
           echo "BUILD_NUMBER=${GITHUB_RUN_NUMBER}" >> "$GITHUB_ENV"
 
+      - name: Validate release secrets
+        env:
+          SIGN_IDENTITY: ${{ secrets.SIGN_IDENTITY }}
+          APPLE_CERT_PASSWORD: ${{ secrets.APPLE_CERT_PASSWORD }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$SIGN_IDENTITY" || { echo "::error::Missing SIGN_IDENTITY"; exit 1; }
+          test -n "$APPLE_CERT_P12" || { echo "::error::Missing APPLE_CERT_P12"; exit 1; }
+          test -n "$APPLE_CERT_PASSWORD" || { echo "::error::Missing APPLE_CERT_PASSWORD"; exit 1; }
+          test -n "$APPLE_API_KEY_P8" || { echo "::error::Missing APPLE_API_KEY_P8"; exit 1; }
+          test -n "$APPLE_API_KEY_ID" || { echo "::error::Missing APPLE_API_KEY_ID"; exit 1; }
+          test -n "$APPLE_API_ISSUER" || { echo "::error::Missing APPLE_API_ISSUER"; exit 1; }
+          test -n "$SPARKLE_PRIVATE_KEY" || { echo "::error::Missing SPARKLE_PRIVATE_KEY"; exit 1; }
+
       - name: Test
         run: make test
+
+      # The certificate is imported into a keychain of this job's own, so the
+      # packaging steps that follow can sign without a UI prompt.
+      - name: Prepare signing keychain
+        env:
+          APPLE_CERT_PASSWORD: ${{ secrets.APPLE_CERT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          keychain="$RUNNER_TEMP/signing.keychain-db"
+          password="$(openssl rand -base64 24)"
+          printf '%s' "$APPLE_CERT_P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p "$password" "$keychain"
+          # Without this the keychain re-locks on a timer mid-build and signing
+          # fails with an error that names neither the keychain nor the lock.
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$password" "$keychain"
+          security import "$RUNNER_TEMP/cert.p12" -k "$keychain" \
+            -P "$APPLE_CERT_PASSWORD" -T /usr/bin/codesign
+          # Lets codesign use the key without a UI prompt nobody is there to answer.
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$password" "$keychain" >/dev/null
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+          rm -f "$RUNNER_TEMP/cert.p12"
+          echo "KEYCHAIN=$keychain" >> "$GITHUB_ENV"
+          security find-identity -v -p codesigning "$keychain"
+
+      # notarytool reads the App Store Connect key from a file, so the secret is
+      # materialised under RUNNER_TEMP, which the runner discards with the job.
+      - name: Write notarization key
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/private_keys"
+          printf '%s' "$APPLE_API_KEY_P8" | base64 --decode > "$RUNNER_TEMP/private_keys/AuthKey.p8"
+          chmod 600 "$RUNNER_TEMP/private_keys/AuthKey.p8"
 
       - name: Build DMG
         env:
           SIGN_IDENTITY: ${{ secrets.SIGN_IDENTITY }}
+          APPLE_API_KEY: ${{ format('{0}/private_keys/AuthKey.p8', runner.temp) }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
         run: Scripts/package-dmg.sh release
+
+      # Assert the signature and notarization ticket before publishing.
+      - name: Verify release is signed and notarized
+        env:
+          SIGN_IDENTITY: ${{ secrets.SIGN_IDENTITY }}
+        run: |
+          set -euo pipefail
+          app=".build/VibeUsage.app"
+          dmg=".build/VibeUsage-${VERSION}.dmg"
+          test -n "${SIGN_IDENTITY:-}" || { echo "::error::SIGN_IDENTITY secret is not set"; exit 1; }
+          codesign --verify --deep --strict --verbose=2 "$app"
+          authority="$(codesign -dv --verbose=4 "$app" 2>&1 | sed -n 's/^Authority=//p' | head -1)"
+          echo "app authority: $authority"
+          case "$authority" in
+            "Developer ID Application"*) ;;
+            *) echo "::error::app is not Developer ID signed (authority=$authority)"; exit 1 ;;
+          esac
+          if [ "${APPLE_API_KEY_P8:-}" != '' ]; then
+            xcrun stapler validate "$dmg"
+            spctl --assess --type open --context context:primary-signature --verbose=2 "$dmg"
+          else
+            echo "::warning::APPLE_API_KEY_P8 not set; the dmg was not notarized"
+          fi
 
       - name: Generate signed Sparkle appcast
         env:
