@@ -8,6 +8,7 @@ public enum AdditionalSourceAdapters {
         HermesUsageAdapter(),
         PiAgentUsageAdapter(),
         OhMyPiUsageAdapter(),
+        FastVibeUsageAdapter(),
         GooseUsageAdapter(),
         OpenClawUsageAdapter(),
         KiloUsageAdapter(),

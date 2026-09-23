@@ -23,7 +23,7 @@ VibeUsage 是一款 macOS 菜单栏应用，用来汇总本机 AI 编程助手�
 
 ## 支持的 AI 编程助手
 
-VibeUsage 当前可以读取以下 15 种工具的本地用量：
+VibeUsage 当前可以读取以下 16 种工具的本地用量：
 
 | Agent | 默认数据位置 | 自定义位置环境变量 |
 |---|---|---|
@@ -35,6 +35,7 @@ VibeUsage 当前可以读取以下 15 种工具的本地用量：
 | Hermes Agent | `~/.hermes` | `HERMES_HOME` |
 | pi-agent | `~/.pi/agent/sessions` | `PI_AGENT_DIR` |
 | oh-my-pi | `~/.omp/agent/sessions`、`~/.local/share/omp/sessions` | `PI_CONFIG_DIR`、`PI_CODING_AGENT_DIR`、`XDG_DATA_HOME` |
+| FastVibe | `~/Library/Application Support/FastVibe/runtime/engine` | `FASTVIBE_USER_DATA` |
 | Goose | `~/.local/share/goose/sessions`、`~/Library/Application Support/goose/sessions`、`~/.local/share/Block/goose/sessions` | `GOOSE_PATH_ROOT` |
 | OpenClaw | `~/.openclaw`、`~/.clawdbot`、`~/.moltbot`、`~/.moldbot` | `OPENCLAW_DIR` |
 | Kilo | `~/.local/share/kilo` | `KILO_DATA_DIR` |

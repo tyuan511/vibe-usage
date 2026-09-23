@@ -14,6 +14,7 @@ import VibeUsagePricing
     #expect(ids.contains("hermes-agent"))
     #expect(ids.contains("pi-agent"))
     #expect(ids.contains("oh-my-pi"))
+    #expect(ids.contains("fastvibe"))
     #expect(ids.contains("goose"))
     #expect(ids.contains("openclaw"))
     #expect(ids.contains("kilo"))
@@ -629,6 +630,64 @@ import VibeUsagePricing
     let inference = try #require(result.events.first { $0.sessionID == "session-b" })
     #expect(chat.tokens == TokenCounts(input: 90, output: 50, cacheRead: 10))
     #expect(inference.tokens == TokenCounts(input: 40, output: 6))
+}
+
+@Test func fastVibeAdapterParsesPiTranscriptAndDecodesProject() throws {
+    let directory = try TemporaryUsageDirectory()
+    let sessions = directory.url.appendingPathComponent("sessions/--Users-yuantang-code-fastvibe--", isDirectory: true)
+    try FileManager.default.createDirectory(at: sessions, withIntermediateDirectories: true)
+    let file = sessions.appendingPathComponent("2026-09-21T22-43-57-405Z_01a0c623-e95c-71dc-b0de-efc703801353.jsonl")
+    try """
+    {"type":"session","version":3,"id":"01a0c623-e95c-71dc-b0de-efc703801353","timestamp":"2026-09-21T22:43:57.405Z","cwd":"/Users/yuantang/code/fastvibe"}
+    {"type":"message","id":"93cf8070","timestamp":"2026-09-21T22:44:52.674Z","message":{"role":"user","content":"hi"}}
+    {"type":"message","id":"c2462175","timestamp":"2026-09-21T22:44:54.694Z","message":{"role":"assistant","provider":"fastvibe","model":"grok-4.7","usage":{"input":5145,"output":74,"cacheRead":1152,"cacheWrite":0,"reasoning":41,"totalTokens":6371,"cost":{"total":0.009048}}}}
+    {"type":"message","id":"zero","timestamp":"2026-09-21T22:44:55.000Z","message":{"role":"assistant","model":"grok-4.7","usage":{"input":0,"output":0,"totalTokens":0}}}
+
+    """.data(using: .utf8)!.write(to: file)
+
+    let adapter = try #require(AdditionalSourceAdapters.all.first { $0.descriptor.id.rawValue == "fastvibe" })
+    let result = try adapter.parseIncrementally(fileAt: file.path, from: nil, pricing: BundledPricingProvider())
+
+    #expect(result.events.count == 1)
+    let event = try #require(result.events.first)
+    #expect(event.sourceID.rawValue == "fastvibe")
+    #expect(event.projectOrWorkspace == "-Users-yuantang-code-fastvibe")
+    #expect(event.sessionID == "01a0c623-e95c-71dc-b0de-efc703801353")
+    #expect(event.requestID == "c2462175")
+    #expect(event.model == "[fastvibe] grok-4.7")
+    #expect(event.tokens == TokenCounts(input: 5145, output: 74, cacheCreate: 0, cacheRead: 1152, reasoning: 41))
+    #expect(event.costUSD == Decimal(string: "0.009048"))
+    #expect(event.costIsEstimated == false)
+    #expect(event.dedupKey == "fastvibe:01a0c623-e95c-71dc-b0de-efc703801353:c2462175")
+}
+
+@Test func fastVibeAdapterReadsLedgerAndSharesDedupKeyWithTranscript() throws {
+    let ledger = try TemporaryUsageFile(
+        extension: "jsonl",
+        contents: """
+        {"sessionId":"session-a","entryId":"entry-live","provider":"fastvibe","model":"grok-4.7","at":1789481365134,"input":5145,"output":74,"cacheRead":1152,"cacheWrite":0,"tokens":6371,"cost":0.009048,"toolCalls":1}
+        {"sessionId":"session-gone","entryId":"entry-gone","provider":"fastvibe","model":"grok-4.7","at":1789481365134,"input":100,"output":20,"cacheRead":0,"cacheWrite":0,"tokens":120,"cost":0,"toolCalls":0}
+
+        """
+    )
+
+    let adapter = try #require(AdditionalSourceAdapters.all.first { $0.descriptor.id.rawValue == "fastvibe" })
+    let pricing = TestPricingProvider(rates: [
+        "grok-4.7": ModelPricingRate(inputPerMillion: 1, outputPerMillion: 2)
+    ])
+    let result = try adapter.parseIncrementally(fileAt: ledger.url.path, from: nil, pricing: pricing)
+
+    #expect(result.events.count == 2)
+    let live = try #require(result.events.first { $0.sessionID == "session-a" })
+    // Same key the transcript copy produces, so the two collapse to one event.
+    #expect(live.dedupKey == "fastvibe:session-a:entry-live")
+    #expect(live.costUSD == Decimal(string: "0.009048"))
+    #expect(live.projectOrWorkspace == "unknown")
+
+    let gone = try #require(result.events.first { $0.sessionID == "session-gone" })
+    #expect(gone.tokens == TokenCounts(input: 100, output: 20))
+    #expect(gone.costIsEstimated == true)
+    #expect(gone.costUSD == Decimal(string: "0.00014"))
 }
 
 private final class TemporaryUsageFile {
