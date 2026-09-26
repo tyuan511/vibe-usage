@@ -1672,8 +1672,8 @@
     "outputPerMillion": 4.0
   },
   "qwen3-vl-30b-a3b-instruct": {
-    "inputPerMillion": 0.13,
-    "outputPerMillion": 0.52
+    "inputPerMillion": 0.15,
+    "outputPerMillion": 0.6
   },
   "qwen3-vl-30b-a3b-thinking": {
     "inputPerMillion": 0.2,
@@ -1737,7 +1737,7 @@
   "qwen3.6-27b": {
     "cacheReadPerMillion": 0.15,
     "inputPerMillion": 0.32,
-    "outputPerMillion": 2.7
+    "outputPerMillion": 3.2
   },
   "qwen3.6-35b-a3b": {
     "cacheReadPerMillion": 0.05,
