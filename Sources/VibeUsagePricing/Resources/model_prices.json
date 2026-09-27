@@ -1600,8 +1600,8 @@
     "outputPerMillion": 2.3
   },
   "qwen3-30b-a3b": {
-    "inputPerMillion": 0.12,
-    "outputPerMillion": 0.5
+    "inputPerMillion": 0.13,
+    "outputPerMillion": 0.52
   },
   "qwen3-30b-a3b-instruct-2507": {
     "inputPerMillion": 0.1,
