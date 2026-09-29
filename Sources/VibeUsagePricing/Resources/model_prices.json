@@ -172,6 +172,12 @@
     "inputPerMillion": 2.0,
     "outputPerMillion": 10.0
   },
+  "claude-sonnet-5-5": {
+    "cacheReadPerMillion": 0.2,
+    "cacheWritePerMillion": 2.5,
+    "inputPerMillion": 2.0,
+    "outputPerMillion": 10.0
+  },
   "codex-mini-latest": {
     "cacheReadPerMillion": 0.375,
     "inputPerMillion": 1.5,
