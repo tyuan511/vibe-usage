@@ -82,6 +82,12 @@
     "inputPerMillion": 1.0,
     "outputPerMillion": 5.0
   },
+  "claude-haiku-4.5": {
+    "cacheReadPerMillion": 0.1,
+    "cacheWritePerMillion": 1.25,
+    "inputPerMillion": 1.0,
+    "outputPerMillion": 5.0
+  },
   "claude-mythos-5": {
     "cacheReadPerMillion": 1.0,
     "cacheWritePerMillion": 12.5,
@@ -1040,6 +1046,12 @@
     "inputPerMillion": 2.0,
     "outputPerMillion": 10.0
   },
+  "gpt-6.1-sol": {
+    "cacheReadPerMillion": 0.1,
+    "cacheWritePerMillion": 2.5,
+    "inputPerMillion": 2.0,
+    "outputPerMillion": 10.0
+  },
   "grok-3": {
     "cacheReadPerMillion": 0.2,
     "inputPerMillion": 1.25,
@@ -1589,8 +1601,8 @@
     "outputPerMillion": 1.0
   },
   "qwen3-14b": {
-    "inputPerMillion": 0.2275,
-    "outputPerMillion": 0.91
+    "inputPerMillion": 0.12,
+    "outputPerMillion": 0.24
   },
   "qwen3-235b-a22b": {
     "inputPerMillion": 0.455,
@@ -1606,8 +1618,8 @@
     "outputPerMillion": 2.3
   },
   "qwen3-30b-a3b": {
-    "inputPerMillion": 0.13,
-    "outputPerMillion": 0.52
+    "inputPerMillion": 0.12,
+    "outputPerMillion": 0.5
   },
   "qwen3-30b-a3b-instruct-2507": {
     "inputPerMillion": 0.1,
