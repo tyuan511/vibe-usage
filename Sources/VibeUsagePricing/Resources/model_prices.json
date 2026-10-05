@@ -1806,8 +1806,9 @@
   },
   "qwen3.8-27b": {
     "cacheReadPerMillion": 0.085,
-    "inputPerMillion": 0.42,
-    "outputPerMillion": 3.0
+    "cacheWritePerMillion": 0.53125,
+    "inputPerMillion": 0.425,
+    "outputPerMillion": 2.55
   },
   "qwen3.8-27b:free": {
     "inputPerMillion": 0.0,
