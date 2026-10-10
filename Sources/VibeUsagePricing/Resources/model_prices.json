@@ -94,6 +94,12 @@
     "inputPerMillion": 0.1,
     "outputPerMillion": 0.5
   },
+  "claude-haiku-5.5": {
+    "cacheReadPerMillion": 0.01,
+    "cacheWritePerMillion": 0.125,
+    "inputPerMillion": 0.1,
+    "outputPerMillion": 0.5
+  },
   "claude-mythos-5": {
     "cacheReadPerMillion": 1.0,
     "cacheWritePerMillion": 12.5,
