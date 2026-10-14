@@ -466,6 +466,11 @@
     "inputPerMillion": 0.75,
     "outputPerMillion": 4.5
   },
+  "gemini-4-argon": {
+    "cacheReadPerMillion": 0.1,
+    "inputPerMillion": 2.0,
+    "outputPerMillion": 10.0
+  },
   "gemini-embedding-001": {
     "inputPerMillion": 0.15,
     "outputPerMillion": 0
