@@ -1012,6 +1012,11 @@
     "inputPerMillion": 12.5,
     "outputPerMillion": 75.0
   },
+  "gpt-5.5-cyber-preview": {
+    "cacheReadPerMillion": 1.25,
+    "inputPerMillion": 12.5,
+    "outputPerMillion": 75.0
+  },
   "gpt-5.5-pro": {
     "inputPerMillion": 30.0,
     "outputPerMillion": 180.0
