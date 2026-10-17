@@ -76,6 +76,12 @@
     "inputPerMillion": 10.0,
     "outputPerMillion": 50.0
   },
+  "claude-fable-5.1": {
+    "cacheReadPerMillion": 0.25,
+    "cacheWritePerMillion": 12.5,
+    "inputPerMillion": 10.0,
+    "outputPerMillion": 50.0
+  },
   "claude-haiku-4-5": {
     "cacheReadPerMillion": 0.1,
     "cacheWritePerMillion": 1.25,
@@ -154,6 +160,12 @@
     "inputPerMillion": 5.0,
     "outputPerMillion": 25.0
   },
+  "claude-opus-4.8": {
+    "cacheReadPerMillion": 0.5,
+    "cacheWritePerMillion": 6.25,
+    "inputPerMillion": 5.0,
+    "outputPerMillion": 25.0
+  },
   "claude-opus-5": {
     "cacheReadPerMillion": 0.5,
     "cacheWritePerMillion": 6.25,
@@ -161,6 +173,12 @@
     "outputPerMillion": 25.0
   },
   "claude-opus-5-5": {
+    "cacheReadPerMillion": 0.2,
+    "cacheWritePerMillion": 5.0,
+    "inputPerMillion": 4.0,
+    "outputPerMillion": 20.0
+  },
+  "claude-opus-5.5": {
     "cacheReadPerMillion": 0.2,
     "cacheWritePerMillion": 5.0,
     "inputPerMillion": 4.0,
@@ -191,6 +209,12 @@
     "outputPerMillion": 10.0
   },
   "claude-sonnet-5-5": {
+    "cacheReadPerMillion": 0.1,
+    "cacheWritePerMillion": 2.5,
+    "inputPerMillion": 2.0,
+    "outputPerMillion": 10.0
+  },
+  "claude-sonnet-5.5": {
     "cacheReadPerMillion": 0.1,
     "cacheWritePerMillion": 2.5,
     "inputPerMillion": 2.0,
@@ -1483,6 +1507,11 @@
     "cacheReadPerMillion": 0.075,
     "inputPerMillion": 0.75,
     "outputPerMillion": 4.5
+  },
+  "mai-code-1.1-flash": {
+    "cacheReadPerMillion": 0.02,
+    "inputPerMillion": 0.2,
+    "outputPerMillion": 1.2
   },
   "o1": {
     "cacheReadPerMillion": 7.5,
