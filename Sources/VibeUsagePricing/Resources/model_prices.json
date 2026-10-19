@@ -166,6 +166,12 @@
     "inputPerMillion": 5.0,
     "outputPerMillion": 25.0
   },
+  "claude-opus-4.8-fast": {
+    "cacheReadPerMillion": 1.0,
+    "cacheWritePerMillion": 12.5,
+    "inputPerMillion": 10.0,
+    "outputPerMillion": 50.0
+  },
   "claude-opus-5": {
     "cacheReadPerMillion": 0.5,
     "cacheWritePerMillion": 6.25,
@@ -197,6 +203,12 @@
     "outputPerMillion": 15.0
   },
   "claude-sonnet-4-6": {
+    "cacheReadPerMillion": 0.3,
+    "cacheWritePerMillion": 3.75,
+    "inputPerMillion": 3.0,
+    "outputPerMillion": 15.0
+  },
+  "claude-sonnet-4.6": {
     "cacheReadPerMillion": 0.3,
     "cacheWritePerMillion": 3.75,
     "inputPerMillion": 3.0,
