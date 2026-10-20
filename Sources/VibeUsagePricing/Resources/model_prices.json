@@ -1852,6 +1852,7 @@
   },
   "qwen3.7-max": {
     "cacheReadPerMillion": 0.5,
+    "cacheWritePerMillion": 3.125,
     "inputPerMillion": 2.5,
     "outputPerMillion": 7.5
   },
