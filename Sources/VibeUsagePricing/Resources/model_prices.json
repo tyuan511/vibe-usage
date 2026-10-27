@@ -1115,6 +1115,12 @@
     "inputPerMillion": 2.0,
     "outputPerMillion": 10.0
   },
+  "gpt-6.1-terra": {
+    "cacheReadPerMillion": 0.05,
+    "cacheWritePerMillion": 1.25,
+    "inputPerMillion": 1.0,
+    "outputPerMillion": 5.0
+  },
   "grok-3": {
     "cacheReadPerMillion": 0.2,
     "inputPerMillion": 1.25,
