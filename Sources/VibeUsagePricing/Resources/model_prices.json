@@ -1491,6 +1491,12 @@
     "inputPerMillion": 3.0,
     "outputPerMillion": 15.0
   },
+  "kimi-k3.1-pro": {
+    "cacheReadPerMillion": 0.2,
+    "cacheWritePerMillion": 2.0,
+    "inputPerMillion": 2.0,
+    "outputPerMillion": 10.0
+  },
   "kimi-latest": {
     "cacheReadPerMillion": 0.15,
     "inputPerMillion": 2.0,
