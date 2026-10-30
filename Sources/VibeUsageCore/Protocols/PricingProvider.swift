@@ -47,14 +47,14 @@ public extension PricingProvider {
 /// so cache and source-specific reasoning-token behavior is defined once.
 public enum CostCalculator {
     /// Applies the source-specific reasoning-token convention used by adapters.
-    /// Codex reports reasoning as a subset of output; other sources report it
-    /// separately and therefore bill it at the output-token rate.
+    /// Codex and ZCode report reasoning as a subset of output; other sources
+    /// report it separately and therefore bill it at the output-token rate.
     public static func cost(
         for tokens: TokenCounts,
         sourceID: AgentSourceID,
         rate: ModelPricingRate
     ) -> Decimal {
-        guard sourceID != .codexCLI else {
+        guard sourceID != .codexCLI, sourceID != .zcode else {
             return cost(for: tokens, rate: rate)
         }
         var billableTokens = tokens

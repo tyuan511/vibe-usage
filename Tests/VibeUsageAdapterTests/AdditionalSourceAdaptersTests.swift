@@ -20,6 +20,7 @@ import VibeUsagePricing
     #expect(ids.contains("kilo"))
     #expect(ids.contains("kimi"))
     #expect(ids.contains("qwen"))
+    #expect(ids.contains("zcode"))
     #expect(ids.contains("github-copilot-cli"))
     #expect(ids.contains("gemini-cli"))
 }
@@ -688,6 +689,119 @@ import VibeUsagePricing
     #expect(gone.tokens == TokenCounts(input: 100, output: 20))
     #expect(gone.costIsEstimated == true)
     #expect(gone.costUSD == Decimal(string: "0.00014"))
+}
+
+@Test func zcodeAdapterParsesModelUsageRowsIncrementally() throws {
+    let database = try TemporaryUsageDatabase(name: "db.sqlite")
+    try database.queue.write { db in
+        try db.execute(sql: """
+            CREATE TABLE model_usage (
+                id TEXT PRIMARY KEY,
+                session_id TEXT,
+                model_id TEXT,
+                status TEXT,
+                started_at INTEGER,
+                completed_at INTEGER,
+                input_tokens INTEGER DEFAULT 0,
+                output_tokens INTEGER DEFAULT 0,
+                reasoning_tokens INTEGER DEFAULT 0,
+                cache_creation_input_tokens INTEGER DEFAULT 0,
+                cache_read_input_tokens INTEGER DEFAULT 0
+            )
+            """)
+        try db.execute(sql: "CREATE TABLE session (id TEXT PRIMARY KEY, directory TEXT)")
+        try db.execute(sql: "INSERT INTO session (id, directory) VALUES ('session-a', '/Users/me/code/app')")
+        // A request row inserted at start, before any tokens are known.
+        try db.execute(
+            sql: "INSERT INTO model_usage (id, session_id, model_id, status, started_at) VALUES (?, ?, ?, 'running', ?)",
+            arguments: ["usage-1", "session-a", "GLM-5.3-Flash", 1_767_312_000_000]
+        )
+    }
+
+    let adapter = try #require(AdditionalSourceAdapters.all.first { $0.descriptor.id.rawValue == "zcode" })
+    let first = try adapter.parseIncrementally(fileAt: database.url.path, from: nil, pricing: BundledPricingProvider())
+    #expect(first.events.isEmpty)
+
+    // The same row updated in place once the request completes.
+    try database.queue.write { db in
+        try db.execute(
+            sql: """
+            UPDATE model_usage
+            SET status = 'completed', completed_at = ?, input_tokens = 55264, output_tokens = 482,
+                cache_creation_input_tokens = 0, cache_read_input_tokens = 54848
+            WHERE id = 'usage-1'
+            """,
+            arguments: [1_767_312_030_000]
+        )
+    }
+    let second = try adapter.parseIncrementally(fileAt: database.url.path, from: first.newCheckpoint, pricing: BundledPricingProvider())
+
+    let event = try #require(second.events.first)
+    #expect(second.events.count == 1)
+    #expect(event.sourceID.rawValue == "zcode")
+    #expect(event.sessionID == "session-a")
+    #expect(event.projectOrWorkspace == "/Users/me/code/app")
+    #expect(event.model == "GLM-5.3-Flash")
+    #expect(event.tokens == TokenCounts(input: 416, output: 482, cacheCreate: 0, cacheRead: 54848))
+    #expect(event.costIsEstimated == true)
+    #expect(event.costUSD > 0)
+
+    let third = try adapter.parseIncrementally(fileAt: database.url.path, from: second.newCheckpoint, pricing: BundledPricingProvider())
+    #expect(third.events.isEmpty)
+
+    try database.queue.write { db in
+        try db.execute(
+            sql: "INSERT INTO model_usage (id, session_id, model_id, status, started_at, completed_at, input_tokens, output_tokens) VALUES (?, ?, ?, 'completed', ?, ?, 10, 5)",
+            arguments: ["usage-2", "session-a", "GLM-5.3-Flash", 1_767_312_040_000, 1_767_312_041_000]
+        )
+    }
+    let fourth = try adapter.parseIncrementally(fileAt: database.url.path, from: third.newCheckpoint, pricing: BundledPricingProvider())
+    #expect(fourth.events.count == 1)
+    #expect(fourth.events.first?.requestID == "usage-2")
+}
+
+@Test func zcodeAdapterSplitsCachedPromptTokensAndStripsRouterPrefix() throws {
+    let database = try TemporaryUsageDatabase(name: "db.sqlite")
+    try database.queue.write { db in
+        try db.execute(sql: """
+            CREATE TABLE model_usage (
+                id TEXT PRIMARY KEY,
+                session_id TEXT,
+                model_id TEXT,
+                status TEXT,
+                started_at INTEGER,
+                completed_at INTEGER,
+                input_tokens INTEGER DEFAULT 0,
+                output_tokens INTEGER DEFAULT 0,
+                reasoning_tokens INTEGER DEFAULT 0,
+                cache_creation_input_tokens INTEGER DEFAULT 0,
+                cache_read_input_tokens INTEGER DEFAULT 0
+            )
+            """)
+        try db.execute(sql: "CREATE TABLE session (id TEXT PRIMARY KEY, directory TEXT)")
+        try db.execute(sql: "INSERT INTO session (id, directory) VALUES ('session-b', '/Users/me/code/other')")
+        // Router-prefixed model plus a zero-token cancelled row that must be skipped.
+        try db.execute(
+            sql: "INSERT INTO model_usage (id, session_id, model_id, status, started_at, completed_at, input_tokens, output_tokens, reasoning_tokens, cache_creation_input_tokens, cache_read_input_tokens) VALUES (?, ?, ?, 'completed', ?, ?, 1000, 50, 20, 100, 800)",
+            arguments: ["usage-a", "session-b", "codex/gpt-6.1-sol", 1_767_312_000_000, 1_767_312_001_000]
+        )
+        try db.execute(
+            sql: "INSERT INTO model_usage (id, session_id, model_id, status, started_at, completed_at) VALUES (?, ?, ?, 'cancelled', ?, ?)",
+            arguments: ["usage-b", "session-b", "GLM-5.3-Flash", 1_767_312_002_000, 1_767_312_003_000]
+        )
+    }
+
+    let adapter = try #require(AdditionalSourceAdapters.all.first { $0.descriptor.id.rawValue == "zcode" })
+    let result = try adapter.parseIncrementally(fileAt: database.url.path, from: nil, pricing: BundledPricingProvider())
+
+    let event = try #require(result.events.first)
+    #expect(result.events.count == 1)
+    #expect(event.requestID == "usage-a")
+    #expect(event.dedupKey == "zcode:usage-a")
+    #expect(event.model == "gpt-6.1-sol")
+    #expect(event.projectOrWorkspace == "/Users/me/code/other")
+    #expect(event.timestamp == Date(timeIntervalSince1970: 1_767_312_000))
+    #expect(event.tokens == TokenCounts(input: 100, output: 50, cacheCreate: 100, cacheRead: 800, reasoning: 20))
 }
 
 private final class TemporaryUsageFile {

@@ -23,6 +23,7 @@ public extension AgentSourceID {
     /// Aggregation, or UI switches on them.
     static let claudeCode = AgentSourceID(rawValue: "claude-code")
     static let codexCLI = AgentSourceID(rawValue: "codex-cli")
+    static let zcode = AgentSourceID(rawValue: "zcode")
 }
 
 /// Everything the UI needs to render a source, without knowing anything else

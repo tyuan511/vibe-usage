@@ -14,6 +14,7 @@ public enum AdditionalSourceAdapters {
         KiloUsageAdapter(),
         KimiUsageAdapter(),
         QwenUsageAdapter(),
+        ZCodeUsageAdapter(),
         GitHubCopilotUsageAdapter(),
         GeminiUsageAdapter()
     ]

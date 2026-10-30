@@ -122,3 +122,10 @@ import VibeUsageCore
     let tokens = TokenCounts(input: 0, output: 0, cacheCreate: 1_000_000, cacheRead: 0)
     #expect(CostCalculator.cost(for: tokens, rate: rate) == 2) // falls back to input rate
 }
+
+@Test func costCalculatorTreatsReasoningAsSubsetOfOutputForZcode() {
+    let rate = ModelPricingRate(inputPerMillion: 0, outputPerMillion: 1)
+    let tokens = TokenCounts(input: 0, output: 500, cacheRead: 0, reasoning: 200)
+    // ZCode reports reasoning inside output, so it must not be billed twice.
+    #expect(CostCalculator.cost(for: tokens, sourceID: .zcode, rate: rate) == Decimal(string: "0.0005"))
+}
