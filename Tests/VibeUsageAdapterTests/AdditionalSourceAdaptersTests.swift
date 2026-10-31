@@ -743,7 +743,7 @@ import VibeUsagePricing
     #expect(event.projectOrWorkspace == "/Users/me/code/app")
     #expect(event.model == "GLM-5.3-Flash")
     #expect(event.tokens == TokenCounts(input: 416, output: 482, cacheCreate: 0, cacheRead: 54848))
-    #expect(event.costIsEstimated == true)
+    #expect(event.costIsEstimated == false)
     #expect(event.costUSD > 0)
 
     let third = try adapter.parseIncrementally(fileAt: database.url.path, from: second.newCheckpoint, pricing: BundledPricingProvider())
@@ -802,6 +802,36 @@ import VibeUsagePricing
     #expect(event.projectOrWorkspace == "/Users/me/code/other")
     #expect(event.timestamp == Date(timeIntervalSince1970: 1_767_312_000))
     #expect(event.tokens == TokenCounts(input: 100, output: 50, cacheCreate: 100, cacheRead: 800, reasoning: 20))
+    #expect(event.costIsEstimated == false)
+}
+
+@Test func zcodeAdapterMarksUnknownModelCostAsEstimated() throws {
+    let database = try TemporaryUsageDatabase(name: "db.sqlite")
+    try database.queue.write { db in
+        try db.execute(sql: """
+            CREATE TABLE model_usage (
+                id TEXT PRIMARY KEY,
+                session_id TEXT,
+                model_id TEXT,
+                status TEXT,
+                started_at INTEGER,
+                completed_at INTEGER,
+                input_tokens INTEGER DEFAULT 0,
+                output_tokens INTEGER DEFAULT 0,
+                reasoning_tokens INTEGER DEFAULT 0,
+                cache_creation_input_tokens INTEGER DEFAULT 0,
+                cache_read_input_tokens INTEGER DEFAULT 0
+            )
+            """)
+        try db.execute(sql: "INSERT INTO model_usage (id, session_id, model_id, status, started_at, completed_at, input_tokens, output_tokens) VALUES (?, ?, ?, 'completed', ?, ?, 10, 5)", arguments: ["usage-unknown", "session", "future-zcode-model", 1_767_312_000_000, 1_767_312_001_000])
+    }
+
+    let adapter = try #require(AdditionalSourceAdapters.all.first { $0.descriptor.id.rawValue == "zcode" })
+    let result = try adapter.parseIncrementally(fileAt: database.url.path, from: nil, pricing: BundledPricingProvider())
+
+    let event = try #require(result.events.first)
+    #expect(event.costUSD == 0)
+    #expect(event.costIsEstimated == true)
 }
 
 private final class TemporaryUsageFile {

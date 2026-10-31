@@ -85,6 +85,45 @@ private func makeEvent(
     #expect(try store.repriceEstimatedEvents(using: pricing) == 0)
 }
 
+@Test func repricingClearsEstimateForPricedZCodeEvents() throws {
+    let store = try makeStore()
+    let file = DiscoveredFile(path: "/tmp/zcode.sqlite", sourceID: .zcode)
+    let event = makeEvent(
+        sourceID: .zcode,
+        model: "gpt-6.1-sol",
+        modelFamily: "gpt-6.1-sol",
+        tokens: TokenCounts(input: 1_000_000, output: 100_000, cacheRead: 500_000, reasoning: 50_000),
+        costUSD: 3.05,
+        costIsEstimated: true,
+        dedupKey: "zcode-priced-history",
+        sourceFilePath: file.path
+    )
+    try store.applyParseResult(
+        ParseResult(events: [event], newCheckpoint: .start),
+        file: file,
+        fileSize: 1,
+        fileModifiedAt: nil
+    )
+
+    let updatedCount = try store.repriceEstimatedEvents(using: TestPricingProvider(rates: [
+        "gpt-6.1-sol": ModelPricingRate(
+            inputPerMillion: 2,
+            outputPerMillion: 10,
+            cacheReadPerMillion: 0.1
+        )
+    ]))
+
+    #expect(updatedCount == 1)
+    let breakdown = try store.modelBreakdown(
+        sourceFilter: [],
+        startDay: "2023-01-01",
+        endDay: "2023-12-31"
+    )
+    let repriced = try #require(breakdown.first { $0.modelFamily == "gpt-6.1-sol" })
+    #expect(repriced.costUSD == Decimal(string: "3.05"))
+    #expect(repriced.estimatedEventCount == 0)
+}
+
 @Test func repricingPreservesUnresolvedAndFallbackEstimates() throws {
     let store = try makeStore()
     let file = DiscoveredFile(path: "/tmp/codex.jsonl", sourceID: .codexCLI)
@@ -160,6 +199,10 @@ private func makeStore() throws -> GRDBUsageEventStore {
     try store.ensureSourceRegistered(AgentSourceDescriptor(
         id: AgentSourceID(rawValue: "qwen"), displayName: "Qwen", shortLabel: "Qwen",
         iconSystemName: "circle", tintColorHex: "#000000", sortOrder: 2
+    ))
+    try store.ensureSourceRegistered(AgentSourceDescriptor(
+        id: .zcode, displayName: "ZCode", shortLabel: "ZCode",
+        iconSystemName: "z.circle", tintColorHex: "#6E56CF", sortOrder: 25
     ))
     return store
 }

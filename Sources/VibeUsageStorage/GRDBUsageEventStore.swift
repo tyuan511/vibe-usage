@@ -123,7 +123,7 @@ public final class GRDBUsageEventStore: UsageEventStore, Sendable {
                 let wasUnpriced = record.costUsd == 0
                 let sourceID = AgentSourceID(rawValue: record.sourceId)
                 let updatedCost = (CostCalculator.cost(for: record.tokens, sourceID: sourceID, rate: rate) as NSDecimalNumber).doubleValue
-                let remainsEstimated = !wasUnpriced
+                let remainsEstimated = sourceID != .zcode && !wasUnpriced
                 guard record.costUsd != updatedCost || record.costIsEstimated != remainsEstimated else {
                     continue
                 }

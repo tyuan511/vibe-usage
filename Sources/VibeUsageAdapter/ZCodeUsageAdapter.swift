@@ -140,6 +140,7 @@ private func zCodeEvent(
         displayCost: nil,
         pricing: pricing,
         pricingCandidates: [bareModel],
+        pricingFallbackIsEstimated: false,
         dedupKey: "zcode:\(rowID)",
         path: path,
         line: nil

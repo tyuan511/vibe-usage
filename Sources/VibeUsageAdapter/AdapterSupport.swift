@@ -127,6 +127,7 @@ func makeEvent(
     displayCost: Decimal?,
     pricing: PricingProvider,
     pricingCandidates: [String]? = nil,
+    pricingFallbackIsEstimated: Bool = true,
     dedupKey: String,
     path: String,
     line: Int?
@@ -144,7 +145,7 @@ func makeEvent(
         modelFamily: family,
         tokens: tokens,
         costUSD: cost,
-        costIsEstimated: displayCost == nil,
+        costIsEstimated: displayCost == nil && (rate == nil || pricingFallbackIsEstimated),
         dedupKey: dedupKey,
         sourceFilePath: path,
         sourceFileLine: line
