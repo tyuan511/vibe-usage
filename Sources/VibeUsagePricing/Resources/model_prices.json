@@ -1102,6 +1102,11 @@
     "inputPerMillion": 10.0,
     "outputPerMillion": 50.0
   },
+  "gpt-6-astra-law": {
+    "cacheReadPerMillion": 1.0,
+    "inputPerMillion": 10.0,
+    "outputPerMillion": 50.0
+  },
   "gpt-6-luna": {
     "cacheReadPerMillion": 0.01,
     "cacheWritePerMillion": 0.125,
