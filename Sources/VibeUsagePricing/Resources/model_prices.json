@@ -567,6 +567,10 @@
     "inputPerMillion": 1.5,
     "outputPerMillion": 9.0
   },
+  "gemini-omni-1.2-flash": {
+    "inputPerMillion": 1.5,
+    "outputPerMillion": 9.0
+  },
   "gemini-omni-flash-preview": {
     "inputPerMillion": 1.5,
     "outputPerMillion": 9.0
@@ -1106,6 +1110,12 @@
     "cacheReadPerMillion": 1.0,
     "inputPerMillion": 10.0,
     "outputPerMillion": 50.0
+  },
+  "gpt-6-cyber": {
+    "cacheReadPerMillion": 2.0,
+    "cacheWritePerMillion": 25.0,
+    "inputPerMillion": 20.0,
+    "outputPerMillion": 100.0
   },
   "gpt-6-luna": {
     "cacheReadPerMillion": 0.01,
