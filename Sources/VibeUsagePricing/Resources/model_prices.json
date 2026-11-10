@@ -34,6 +34,11 @@
     "inputPerMillion": 0.3,
     "outputPerMillion": 1.2
   },
+  "MiniMax-M3.1-Flash": {
+    "cacheReadPerMillion": 0.015,
+    "inputPerMillion": 0.15,
+    "outputPerMillion": 0.6
+  },
   "claude-3-7-sonnet": {
     "cacheReadPerMillion": 0.3,
     "cacheWritePerMillion": 3.75,
@@ -76,11 +81,23 @@
     "inputPerMillion": 10.0,
     "outputPerMillion": 50.0
   },
+  "claude-fable-5-2": {
+    "cacheReadPerMillion": 0.2,
+    "cacheWritePerMillion": 10.0,
+    "inputPerMillion": 8.0,
+    "outputPerMillion": 40.0
+  },
   "claude-fable-5.1": {
     "cacheReadPerMillion": 0.25,
     "cacheWritePerMillion": 12.5,
     "inputPerMillion": 10.0,
     "outputPerMillion": 50.0
+  },
+  "claude-fable-5.2": {
+    "cacheReadPerMillion": 0.2,
+    "cacheWritePerMillion": 10.0,
+    "inputPerMillion": 8.0,
+    "outputPerMillion": 40.0
   },
   "claude-haiku-4-5": {
     "cacheReadPerMillion": 0.1,
