@@ -135,6 +135,12 @@
     "inputPerMillion": 10.0,
     "outputPerMillion": 50.0
   },
+  "claude-mythos-5-2": {
+    "cacheReadPerMillion": 0.2,
+    "cacheWritePerMillion": 10.0,
+    "inputPerMillion": 8.0,
+    "outputPerMillion": 40.0
+  },
   "claude-mythos-preview": {
     "cacheReadPerMillion": 1.0,
     "cacheWritePerMillion": 12.5,
@@ -520,6 +526,11 @@
     "outputPerMillion": 4.5
   },
   "gemini-4-argon": {
+    "cacheReadPerMillion": 0.1,
+    "inputPerMillion": 2.0,
+    "outputPerMillion": 10.0
+  },
+  "gemini-4-carbon": {
     "cacheReadPerMillion": 0.1,
     "inputPerMillion": 2.0,
     "outputPerMillion": 10.0
