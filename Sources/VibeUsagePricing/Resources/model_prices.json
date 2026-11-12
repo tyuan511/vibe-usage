@@ -535,6 +535,10 @@
     "inputPerMillion": 2.0,
     "outputPerMillion": 10.0
   },
+  "gemini-decision-1": {
+    "inputPerMillion": 0.1,
+    "outputPerMillion": 0.0
+  },
   "gemini-embedding-001": {
     "inputPerMillion": 0.15,
     "outputPerMillion": 0
