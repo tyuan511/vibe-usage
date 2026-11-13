@@ -535,6 +535,11 @@
     "inputPerMillion": 2.0,
     "outputPerMillion": 10.0
   },
+  "gemini-4-hydrogen": {
+    "cacheReadPerMillion": 0.075,
+    "inputPerMillion": 1.5,
+    "outputPerMillion": 7.5
+  },
   "gemini-decision-1": {
     "inputPerMillion": 0.1,
     "outputPerMillion": 0.0
