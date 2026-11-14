@@ -508,12 +508,10 @@
     "outputPerMillion": 7.5
   },
   "gemini-3.8-flash-lite-tts": {
-    "cacheReadPerMillion": 0.125,
     "inputPerMillion": 0.5,
     "outputPerMillion": 6.0
   },
   "gemini-3.8-flash-tts": {
-    "cacheReadPerMillion": 0.125,
     "inputPerMillion": 0.5,
     "outputPerMillion": 9.0
   },
