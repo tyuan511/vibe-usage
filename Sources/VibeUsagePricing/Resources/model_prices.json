@@ -1991,5 +1991,9 @@
     "cacheReadPerMillion": 0.016,
     "inputPerMillion": 0.15,
     "outputPerMillion": 0.47
+  },
+  "qwen4-max": {
+    "inputPerMillion": 1.5,
+    "outputPerMillion": 4.5
   }
 }
