@@ -1182,6 +1182,24 @@
     "inputPerMillion": 1.0,
     "outputPerMillion": 5.0
   },
+  "gpt-6.2-astra": {
+    "cacheReadPerMillion": 0.4,
+    "cacheWritePerMillion": 10.0,
+    "inputPerMillion": 8.0,
+    "outputPerMillion": 40.0
+  },
+  "gpt-6.2-astra-law": {
+    "cacheReadPerMillion": 0.4,
+    "cacheWritePerMillion": 10.0,
+    "inputPerMillion": 8.0,
+    "outputPerMillion": 40.0
+  },
+  "gpt-6.2-sol": {
+    "cacheReadPerMillion": 0.1,
+    "cacheWritePerMillion": 2.5,
+    "inputPerMillion": 2.0,
+    "outputPerMillion": 10.0
+  },
   "grok-3": {
     "cacheReadPerMillion": 0.2,
     "inputPerMillion": 1.25,
@@ -1604,6 +1622,16 @@
     "inputPerMillion": 0.2,
     "outputPerMillion": 1.2
   },
+  "mai-code-2": {
+    "cacheReadPerMillion": 0.025,
+    "inputPerMillion": 0.5,
+    "outputPerMillion": 2.5
+  },
+  "mai-code-2-flash": {
+    "cacheReadPerMillion": 0.005,
+    "inputPerMillion": 0.05,
+    "outputPerMillion": 0.25
+  },
   "o1": {
     "cacheReadPerMillion": 7.5,
     "inputPerMillion": 15.0,
@@ -1993,6 +2021,8 @@
     "outputPerMillion": 0.47
   },
   "qwen4-max": {
+    "cacheReadPerMillion": 0.075,
+    "cacheWritePerMillion": 1.875,
     "inputPerMillion": 1.5,
     "outputPerMillion": 4.5
   }
