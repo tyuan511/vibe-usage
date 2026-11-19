@@ -538,6 +538,11 @@
     "inputPerMillion": 1.5,
     "outputPerMillion": 7.5
   },
+  "gemini-4-neon": {
+    "cacheReadPerMillion": 0.15,
+    "inputPerMillion": 3.0,
+    "outputPerMillion": 15.0
+  },
   "gemini-decision-1": {
     "inputPerMillion": 0.1,
     "outputPerMillion": 0.0
@@ -1159,10 +1164,10 @@
     "outputPerMillion": 0.5
   },
   "gpt-6-rosalind": {
-    "cacheReadPerMillion": 1.5,
+    "cacheReadPerMillion": 1.0,
     "cacheWritePerMillion": 18.75,
-    "inputPerMillion": 15.0,
-    "outputPerMillion": 75.0
+    "inputPerMillion": 10.0,
+    "outputPerMillion": 50.0
   },
   "gpt-6-sol": {
     "cacheReadPerMillion": 0.2,
