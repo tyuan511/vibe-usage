@@ -1165,7 +1165,7 @@
   },
   "gpt-6-rosalind": {
     "cacheReadPerMillion": 1.0,
-    "cacheWritePerMillion": 18.75,
+    "cacheWritePerMillion": 12.5,
     "inputPerMillion": 10.0,
     "outputPerMillion": 50.0
   },
